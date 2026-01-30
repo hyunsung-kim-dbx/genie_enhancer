@@ -20,13 +20,13 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pipeline.genie_client import GenieConversationalClient
-from pipeline.space_updater import SpaceUpdater
-from pipeline.benchmark_scorer import BenchmarkScorer
-from pipeline.databricks_llm import DatabricksLLMClient
-from pipeline.space_cloner import SpaceCloner
-from pipeline.sequential_enhancer import SequentialEnhancer
-from pipeline.sql_executor import SQLExecutor
+from lib.genie_client import GenieConversationalClient
+from lib.space_api import SpaceUpdater
+from lib.scorer import BenchmarkScorer
+from lib.llm import DatabricksLLMClient
+from lib.space_cloner import SpaceCloner
+from lib.sequential_enhancer import SequentialEnhancer
+from lib.sql import SQLExecutor
 
 # ============================================================================
 # Page Configuration

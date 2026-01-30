@@ -304,7 +304,7 @@ if __name__ == "__main__":
     target_iteration = int(sys.argv[3])
 
     # Initialize
-    from pipeline.space_updater import SpaceUpdater
+    from lib.space_api import SpaceUpdater
 
     host = os.getenv("DATABRICKS_HOST")
     token = os.getenv("DATABRICKS_TOKEN")

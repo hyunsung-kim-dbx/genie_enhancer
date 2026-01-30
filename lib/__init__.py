@@ -24,6 +24,8 @@ from lib.enhancer import EnhancementPlanner
 from lib.applier import BatchApplier
 from lib.state import JobState, get_job_state
 from lib.reporter import ProgressReporter
+from lib.space_cloner import SpaceCloner
+from lib.sequential_enhancer import SequentialEnhancer
 
 __all__ = [
     # API Clients
@@ -38,6 +40,9 @@ __all__ = [
     # Enhancement (Batch)
     "EnhancementPlanner",
     "BatchApplier",
+    # Enhancement (Sequential)
+    "SpaceCloner",
+    "SequentialEnhancer",
     # State & Reporting
     "JobState",
     "get_job_state",

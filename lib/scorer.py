@@ -15,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pipeline.genie_client import GenieConversationalClient
-from pipeline.sql_executor import SQLExecutor
+from lib.genie_client import GenieConversationalClient
+from lib.sql import SQLExecutor
 from prompts.prompt_loader import PromptLoader
 
 logging.basicConfig(level=logging.INFO)
@@ -509,7 +509,7 @@ class BenchmarkScorer:
 # Example usage
 if __name__ == "__main__":
     import os
-    from pipeline.benchmark_parser import BenchmarkLoader
+    from lib.benchmark_parser import BenchmarkLoader
 
     # Configuration
     HOST = os.getenv("DATABRICKS_HOST")
