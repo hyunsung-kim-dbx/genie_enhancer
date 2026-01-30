@@ -109,12 +109,13 @@ class SpaceUpdater:
         Returns:
             Configuration with sorted and migrated fields
         """
-        # Sort column_configs in data_sources
+        # Sort data_sources fields
         if "data_sources" in config:
             data_sources = config["data_sources"]
 
-            # Sort and migrate column_configs in tables
-            if "tables" in data_sources:
+            # Sort tables by identifier (REQUIRED by API)
+            if "tables" in data_sources and data_sources["tables"]:
+                # First migrate and sort column_configs within each table
                 for table in data_sources["tables"]:
                     if "column_configs" in table and table["column_configs"]:
                         # Migrate v1 -> v2 fields
@@ -127,9 +128,14 @@ class SpaceUpdater:
                             table["column_configs"],
                             key=lambda x: x.get("column_name", "").lower()
                         )
+                # Then sort tables by identifier
+                data_sources["tables"] = sorted(
+                    data_sources["tables"],
+                    key=lambda x: x.get("identifier", "").lower()
+                )
 
-            # Sort and migrate column_configs in metric_views
-            if "metric_views" in data_sources:
+            # Sort metric_views by identifier (if exists)
+            if "metric_views" in data_sources and data_sources["metric_views"]:
                 for mv in data_sources["metric_views"]:
                     if "column_configs" in mv and mv["column_configs"]:
                         # Migrate v1 -> v2 fields
@@ -142,6 +148,11 @@ class SpaceUpdater:
                             mv["column_configs"],
                             key=lambda x: x.get("column_name", "").lower()
                         )
+                # Sort metric_views by identifier
+                data_sources["metric_views"] = sorted(
+                    data_sources["metric_views"],
+                    key=lambda x: x.get("identifier", "").lower()
+                )
 
         # Sort instructions fields
         if "instructions" in config:

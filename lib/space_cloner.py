@@ -345,11 +345,12 @@ class SpaceCloner:
 
     def _prepare_config_for_api(self, config: Dict) -> Dict:
         """Prepare configuration for Genie API (sorting, migration)."""
-        # Sort column_configs in data_sources
+        # Sort data_sources fields
         if "data_sources" in config:
             data_sources = config["data_sources"]
 
-            if "tables" in data_sources:
+            # Sort tables by identifier (REQUIRED by API)
+            if "tables" in data_sources and data_sources["tables"]:
                 for table in data_sources["tables"]:
                     if "column_configs" in table and table["column_configs"]:
                         # Migrate v1 -> v2 fields
@@ -363,6 +364,18 @@ class SpaceCloner:
                             table["column_configs"],
                             key=lambda x: x.get("column_name", "").lower()
                         )
+                # Sort tables by identifier
+                data_sources["tables"] = sorted(
+                    data_sources["tables"],
+                    key=lambda x: x.get("identifier", "").lower()
+                )
+
+            # Sort metric_views by identifier
+            if "metric_views" in data_sources and data_sources["metric_views"]:
+                data_sources["metric_views"] = sorted(
+                    data_sources["metric_views"],
+                    key=lambda x: x.get("identifier", "").lower()
+                )
 
         # Sort instructions fields
         if "instructions" in config:
