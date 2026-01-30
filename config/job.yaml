@@ -34,7 +34,7 @@ parameters:
   - name: warehouse_id
     default: ""
   - name: llm_endpoint
-    default: "databricks-meta-llama-3-1-70b-instruct"
+    default: "databricks-gpt-5-2"
   - name: catalog
     default: "sandbox"
   - name: schema
@@ -61,15 +61,8 @@ tasks:
         schema: "{{job.parameters.schema}}"
         benchmarks_table: "{{job.parameters.benchmarks_table}}"
     timeout_seconds: 3600
-    # Use existing cluster or define new cluster below
-    # existing_cluster_id: "<your-cluster-id>"
-    new_cluster:
-      spark_version: "14.3.x-scala2.12"
-      num_workers: 0
-      node_type_id: "i3.xlarge"
-      runtime_engine: STANDARD
-      spark_conf:
-        spark.databricks.delta.preview.enabled: "true"
+    # Use serverless compute
+    environment_key: "Default"
 
   - task_key: "02_plan_enhancement"
     description: "Analyze failures and generate enhancement plan"
@@ -86,15 +79,10 @@ tasks:
         llm_endpoint: "{{job.parameters.llm_endpoint}}"
         catalog: "{{job.parameters.catalog}}"
         schema: "{{job.parameters.schema}}"
-        parallel_workers: "4"
+        parallel_workers: "1"
     timeout_seconds: 7200
-    # Use same cluster as previous task
-    # existing_cluster_id: "<your-cluster-id>"
-    new_cluster:
-      spark_version: "14.3.x-scala2.12"
-      num_workers: 0
-      node_type_id: "i3.xlarge"
-      runtime_engine: STANDARD
+    # Use serverless compute
+    environment_key: "Default"
 
   - task_key: "03_implement"
     description: "Apply fixes to Genie Space"
@@ -112,11 +100,8 @@ tasks:
         schema: "{{job.parameters.schema}}"
         dry_run: "false"
     timeout_seconds: 3600
-    new_cluster:
-      spark_version: "14.3.x-scala2.12"
-      num_workers: 0
-      node_type_id: "i3.xlarge"
-      runtime_engine: STANDARD
+    # Use serverless compute
+    environment_key: "Default"
 
   - task_key: "04_test"
     description: "Validate improvements with final scoring"
@@ -136,11 +121,8 @@ tasks:
         benchmarks_table: "{{job.parameters.benchmarks_table}}"
         indexing_wait: "60"
     timeout_seconds: 3600
-    new_cluster:
-      spark_version: "14.3.x-scala2.12"
-      num_workers: 0
-      node_type_id: "i3.xlarge"
-      runtime_engine: STANDARD
+    # Use serverless compute
+    environment_key: "Default"
 
 # Email notifications (optional)
 # email_notifications:

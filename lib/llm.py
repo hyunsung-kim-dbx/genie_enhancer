@@ -19,7 +19,7 @@ class DatabricksLLMClient:
         self,
         host: str,
         token: str,
-        endpoint_name: str = "databricks-meta-llama-3-1-70b-instruct"
+        endpoint_name: str = "databricks-gpt-5-2"
     ):
         """
         Initialize Databricks LLM client.
@@ -29,9 +29,9 @@ class DatabricksLLMClient:
             token: Personal access token or service principal token
             endpoint_name: Name of the serving endpoint
                 Common options:
-                - databricks-meta-llama-3-1-70b-instruct (recommended)
-                - databricks-meta-llama-3-1-405b-instruct (more powerful)
-                - databricks-dbrx-instruct
+                - databricks-gpt-5-2 (recommended)
+                - databricks-meta-llama-3-1-70b-instruct
+                - databricks-meta-llama-3-1-405b-instruct
         """
         self.host = host.replace("https://", "").replace("http://", "")
         self.endpoint_name = endpoint_name
@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     HOST = os.getenv("DATABRICKS_HOST", "your-workspace.cloud.databricks.com")
     TOKEN = os.getenv("DATABRICKS_TOKEN", "your-token")
-    ENDPOINT = os.getenv("LLM_ENDPOINT", "databricks-meta-llama-3-1-70b-instruct")
+    ENDPOINT = os.getenv("LLM_ENDPOINT", "databricks-gpt-5-2")
 
     print("Testing Databricks LLM Client")
     print("=" * 60)

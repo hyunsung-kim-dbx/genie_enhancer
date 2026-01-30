@@ -15,10 +15,10 @@ dbutils.widgets.text("loop_number", "1", "Loop Number")
 dbutils.widgets.text("space_id", "", "Genie Space ID")
 dbutils.widgets.text("databricks_host", "", "Databricks Host")
 dbutils.widgets.text("databricks_token", "", "Databricks Token")
-dbutils.widgets.text("llm_endpoint", "databricks-meta-llama-3-1-70b-instruct", "LLM Endpoint")
+dbutils.widgets.text("llm_endpoint", "databricks-gpt-5-2", "LLM Endpoint")
 dbutils.widgets.text("catalog", "sandbox", "Catalog")
 dbutils.widgets.text("schema", "genie_enhancement", "Schema")
-dbutils.widgets.text("parallel_workers", "4", "Parallel LLM Workers")
+dbutils.widgets.text("parallel_workers", "1", "Parallel LLM Workers")
 
 # COMMAND ----------
 

@@ -16,7 +16,7 @@ dbutils.widgets.text("space_id", "", "Genie Space ID")
 dbutils.widgets.text("databricks_host", "", "Databricks Host")
 dbutils.widgets.text("databricks_token", "", "Databricks Token")
 dbutils.widgets.text("warehouse_id", "", "SQL Warehouse ID")
-dbutils.widgets.text("llm_endpoint", "databricks-meta-llama-3-1-70b-instruct", "LLM Endpoint")
+dbutils.widgets.text("llm_endpoint", "databricks-gpt-5-2", "LLM Endpoint")
 dbutils.widgets.text("catalog", "sandbox", "Catalog")
 dbutils.widgets.text("schema", "genie_enhancement", "Schema")
 dbutils.widgets.text("benchmarks_table", "", "Benchmarks Table")
@@ -151,15 +151,11 @@ if mode in ["create_job", "create_and_run"]:
         "tags": {"project": "genie-enhancement", "run_id": run_id, "loop": str(loop_number)}
     }
 
-    # Add job cluster if no existing cluster
+    # Use serverless compute if no existing cluster specified
     if not cluster_id:
         for task in job_def["tasks"]:
             del task["existing_cluster_id"]
-            task["new_cluster"] = {
-                "spark_version": "14.3.x-scala2.12",
-                "num_workers": 0,
-                "node_type_id": "i3.xlarge"
-            }
+            task["environment_key"] = "Default"
 
     # Create job
     response = requests.post(

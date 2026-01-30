@@ -55,7 +55,7 @@ class EnhancementPlanner:
         self,
         failed_benchmarks: List[Dict],
         space_config: Dict,
-        parallel_workers: int = 4
+        parallel_workers: int = 1
     ) -> Dict[str, List[Dict]]:
         """
         Generate ALL fixes for failed benchmarks.
