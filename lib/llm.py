@@ -19,7 +19,9 @@ class DatabricksLLMClient:
         self,
         host: str,
         token: str,
-        endpoint_name: str = "databricks-gpt-5-2"
+        endpoint_name: str = "databricks-gpt-5-2",
+        request_delay: float = 5.0,
+        rate_limit_base_delay: float = 60.0
     ):
         """
         Initialize Databricks LLM client.
@@ -32,6 +34,8 @@ class DatabricksLLMClient:
                 - databricks-gpt-5-2 (recommended)
                 - databricks-meta-llama-3-1-70b-instruct
                 - databricks-meta-llama-3-1-405b-instruct
+            request_delay: Delay in seconds between requests (default 5s)
+            rate_limit_base_delay: Base delay for rate limit retries (default 60s)
         """
         self.host = host.replace("https://", "").replace("http://", "")
         self.endpoint_name = endpoint_name
@@ -40,6 +44,9 @@ class DatabricksLLMClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
+        self.request_delay = request_delay
+        self.rate_limit_base_delay = rate_limit_base_delay
+        self._last_request_time = 0
 
     def generate(
         self,
@@ -62,6 +69,15 @@ class DatabricksLLMClient:
         Returns:
             Generated text
         """
+        import time
+
+        # Throttle requests - wait if needed since last request
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self.request_delay and self._last_request_time > 0:
+            wait_time = self.request_delay - elapsed
+            logger.debug(f"Throttling: waiting {wait_time:.1f}s before request")
+            time.sleep(wait_time)
+
         payload = {
             "messages": [
                 {
@@ -79,6 +95,7 @@ class DatabricksLLMClient:
         for attempt in range(retry_count):
             try:
                 logger.debug(f"LLM request (attempt {attempt + 1}/{retry_count})")
+                self._last_request_time = time.time()
 
                 response = requests.post(
                     self.base_url,
@@ -118,10 +135,9 @@ class DatabricksLLMClient:
                     if hasattr(e, 'response') and e.response is not None:
                         status_code = e.response.status_code
                         if status_code in [429, 500, 502, 503, 504]:
-                            import time
-                            # Longer backoff for rate limits: 5s, 10s, 20s, 40s, 80s
-                            wait_time = 5 * (2 ** attempt)
-                            logger.info(f"Rate limit/error {status_code}, retrying in {wait_time}s... (attempt {attempt + 1}/{retry_count})")
+                            # Exponential backoff: 60s, 120s, 240s, 480s (for rate limits)
+                            wait_time = self.rate_limit_base_delay * (2 ** attempt)
+                            logger.info(f"Rate limit/error {status_code}, retrying in {wait_time:.0f}s... (attempt {attempt + 1}/{retry_count})")
                             time.sleep(wait_time)
                             continue
 
