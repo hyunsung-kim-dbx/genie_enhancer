@@ -1,0 +1,156 @@
+# Databricks Job Definition for Genie Enhancement Pipeline
+#
+# Deploy this job using:
+#   1. Databricks Asset Bundles: databricks bundle deploy
+#   2. Databricks CLI: databricks jobs create --json @job_definition.json
+#   3. Terraform: Use databricks_job resource
+#   4. Coordinator Notebook: Run 00_coordinator.py with run_mode="create_job"
+#
+# This 4-stage pipeline provides visibility into each enhancement phase.
+
+name: "Genie Enhancement Pipeline"
+description: |
+  4-stage pipeline for enhancing Genie Spaces:
+  1. Benchmark - Score current state
+  2. Plan - Analyze failures and generate fixes
+  3. Implement - Apply fixes
+  4. Test - Validate improvements
+
+format: MULTI_TASK
+max_concurrent_runs: 1
+
+tags:
+  project: genie-enhancement
+  team: data-ai
+
+# Job parameters (passed to all tasks)
+parameters:
+  - name: space_id
+    default: ""
+  - name: databricks_host
+    default: "{{workspace.url}}"
+  - name: databricks_token
+    default: "{{secrets/genie-enhancement/databricks-token}}"
+  - name: warehouse_id
+    default: ""
+  - name: llm_endpoint
+    default: "databricks-meta-llama-3-1-70b-instruct"
+  - name: catalog
+    default: "sandbox"
+  - name: schema
+    default: "genie_enhancement"
+  - name: benchmarks_table
+    default: ""
+  - name: run_id
+    default: "{{job.run_id}}"
+
+# Task definitions
+tasks:
+  - task_key: "01_benchmark"
+    description: "Score benchmarks on Genie Space"
+    notebook_task:
+      notebook_path: "/Workspace/Users/${workspace.user}/genie_enhancer/notebooks/01_benchmark"
+      base_parameters:
+        run_id: "{{job.parameters.run_id}}"
+        space_id: "{{job.parameters.space_id}}"
+        databricks_host: "{{job.parameters.databricks_host}}"
+        databricks_token: "{{job.parameters.databricks_token}}"
+        warehouse_id: "{{job.parameters.warehouse_id}}"
+        llm_endpoint: "{{job.parameters.llm_endpoint}}"
+        catalog: "{{job.parameters.catalog}}"
+        schema: "{{job.parameters.schema}}"
+        benchmarks_table: "{{job.parameters.benchmarks_table}}"
+    timeout_seconds: 3600
+    # Use existing cluster or define new cluster below
+    # existing_cluster_id: "<your-cluster-id>"
+    new_cluster:
+      spark_version: "14.3.x-scala2.12"
+      num_workers: 0
+      node_type_id: "i3.xlarge"
+      runtime_engine: STANDARD
+      spark_conf:
+        spark.databricks.delta.preview.enabled: "true"
+
+  - task_key: "02_plan_enhancement"
+    description: "Analyze failures and generate enhancement plan"
+    depends_on:
+      - task_key: "01_benchmark"
+    notebook_task:
+      notebook_path: "/Workspace/Users/${workspace.user}/genie_enhancer/notebooks/02_plan_enhancement"
+      base_parameters:
+        run_id: "{{job.parameters.run_id}}"
+        space_id: "{{job.parameters.space_id}}"
+        databricks_host: "{{job.parameters.databricks_host}}"
+        databricks_token: "{{job.parameters.databricks_token}}"
+        warehouse_id: "{{job.parameters.warehouse_id}}"
+        llm_endpoint: "{{job.parameters.llm_endpoint}}"
+        catalog: "{{job.parameters.catalog}}"
+        schema: "{{job.parameters.schema}}"
+        parallel_workers: "4"
+    timeout_seconds: 7200
+    # Use same cluster as previous task
+    # existing_cluster_id: "<your-cluster-id>"
+    new_cluster:
+      spark_version: "14.3.x-scala2.12"
+      num_workers: 0
+      node_type_id: "i3.xlarge"
+      runtime_engine: STANDARD
+
+  - task_key: "03_implement"
+    description: "Apply fixes to Genie Space"
+    depends_on:
+      - task_key: "02_plan_enhancement"
+    notebook_task:
+      notebook_path: "/Workspace/Users/${workspace.user}/genie_enhancer/notebooks/03_implement"
+      base_parameters:
+        run_id: "{{job.parameters.run_id}}"
+        space_id: "{{job.parameters.space_id}}"
+        databricks_host: "{{job.parameters.databricks_host}}"
+        databricks_token: "{{job.parameters.databricks_token}}"
+        warehouse_id: "{{job.parameters.warehouse_id}}"
+        catalog: "{{job.parameters.catalog}}"
+        schema: "{{job.parameters.schema}}"
+        dry_run: "false"
+    timeout_seconds: 3600
+    new_cluster:
+      spark_version: "14.3.x-scala2.12"
+      num_workers: 0
+      node_type_id: "i3.xlarge"
+      runtime_engine: STANDARD
+
+  - task_key: "04_test"
+    description: "Validate improvements with final scoring"
+    depends_on:
+      - task_key: "03_implement"
+    notebook_task:
+      notebook_path: "/Workspace/Users/${workspace.user}/genie_enhancer/notebooks/04_test"
+      base_parameters:
+        run_id: "{{job.parameters.run_id}}"
+        space_id: "{{job.parameters.space_id}}"
+        databricks_host: "{{job.parameters.databricks_host}}"
+        databricks_token: "{{job.parameters.databricks_token}}"
+        warehouse_id: "{{job.parameters.warehouse_id}}"
+        llm_endpoint: "{{job.parameters.llm_endpoint}}"
+        catalog: "{{job.parameters.catalog}}"
+        schema: "{{job.parameters.schema}}"
+        benchmarks_table: "{{job.parameters.benchmarks_table}}"
+        indexing_wait: "60"
+    timeout_seconds: 3600
+    new_cluster:
+      spark_version: "14.3.x-scala2.12"
+      num_workers: 0
+      node_type_id: "i3.xlarge"
+      runtime_engine: STANDARD
+
+# Email notifications (optional)
+# email_notifications:
+#   on_success:
+#     - your-email@company.com
+#   on_failure:
+#     - your-email@company.com
+
+# Schedule (optional - remove for manual runs)
+# schedule:
+#   quartz_cron_expression: "0 0 2 * * ?"  # Daily at 2 AM
+#   timezone_id: "Asia/Seoul"
+#   pause_status: PAUSED

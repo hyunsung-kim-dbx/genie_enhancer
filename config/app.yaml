@@ -1,0 +1,53 @@
+name: genie-space-enhancement
+description: Genie Space 대화형 개선 도구 - Interactive Enhancement Tool
+
+# Databricks Apps Configuration
+# Reference: https://docs.databricks.com/en/apps/index.html
+
+# Entry point
+entrypoint: app.py
+
+# Runtime configuration
+runtime:
+  python_version: "3.10"
+
+# Dependencies
+dependencies:
+  - requirements.txt
+
+# Resource configuration (optional)
+resources:
+  # Uncomment to specify compute resources
+  # instance_profile: "ml.m5.large"
+  # min_workers: 1
+  # max_workers: 1
+
+# Environment variables (optional)
+# These will be available in the app
+# Sensitive values should use Databricks Secrets
+env:
+  # Delta table configuration
+  - name: CATALOG
+    value: "sandbox"
+
+  - name: SCHEMA
+    value: "agent_poc"
+
+  # Optional: Default LLM endpoint
+  - name: DEFAULT_LLM_ENDPOINT
+    value: "databricks-gpt-5-2"
+
+# Access control (optional)
+# Uncomment to restrict access
+# permissions:
+#   - user: "user@company.com"
+#     permission: "CAN_MANAGE"
+#   - group: "data-engineers"
+#     permission: "CAN_VIEW"
+
+# Secrets (use Databricks Secrets for sensitive data)
+# Example:
+# secrets:
+#   - scope: "genie-scope"
+#     key: "databricks-token"
+#     env_var: "DATABRICKS_TOKEN"

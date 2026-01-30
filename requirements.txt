@@ -1,0 +1,14 @@
+# Genie Enhancement System Requirements
+
+# Core dependencies
+requests>=2.31.0
+pyyaml>=6.0
+
+# Streamlit app dependencies
+streamlit>=1.28.0
+plotly>=5.17.0
+pandas>=2.0.0
+
+# Databricks (available in Databricks runtime, not needed to install)
+# pyspark - provided by Databricks
+# databricks-sdk - provided by Databricks

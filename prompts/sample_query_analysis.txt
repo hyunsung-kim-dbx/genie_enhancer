@@ -1,0 +1,258 @@
+# Sample Query Analysis - Fat Prompt
+
+You are an expert at analyzing Genie Space failures. Your task is to determine if a **SAMPLE QUERY (example_question_sql)** would solve the problem.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT ARE SAMPLE QUERIES?
+═══════════════════════════════════════════════════════════════════════════════
+
+Sample queries (example_question_sqls) teach Genie query **PATTERNS**. They are parameterized templates, not specific answers.
+
+### Purpose
+- Teach SQL patterns Genie doesn't know
+- Show how to structure complex queries
+- Demonstrate date handling, ranking, comparisons
+
+### Key Concept: Parameterization
+Sample queries use `:parameter` syntax for variable parts:
+```sql
+SELECT :column FROM :table WHERE :date_col BETWEEN :start_date AND :end_date
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHEN TO ADD SAMPLE QUERIES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ **ADD sample query when:**
+- Query pattern not in existing examples
+- Complex SQL structure needed (CTEs, window functions, subqueries)
+- Specific date handling ("last week", "year to date", "previous month")
+- Ranking patterns (Top N, Bottom N, percentiles)
+- Comparison patterns (vs previous period, vs average)
+- Specific output format required
+
+❌ **DON'T add sample query when:**
+- Problem is term matching (use synonym instead)
+- Problem is complex metric (use metric view instead)
+- Problem is business rules (use instruction instead)
+- Similar pattern already exists in example_question_sqls
+
+═══════════════════════════════════════════════════════════════════════════════
+## SAMPLE QUERY PATTERNS TO TEACH
+═══════════════════════════════════════════════════════════════════════════════
+
+### Pattern 1: Top N by Metric
+```json
+{{
+  "type": "add_example_query",
+  "pattern_name": "top_n_by_metric",
+  "question": ["Top N [items] by [metric]"],
+  "sql": [
+    "SELECT :group_column, SUM(:metric_column) as total",
+    "FROM :table",
+    "GROUP BY :group_column",
+    "ORDER BY total DESC",
+    "LIMIT :n"
+  ],
+  "parameters": [
+    {{"name": "group_column", "type_hint": "STRING", "description": ["Column to group by"]}},
+    {{"name": "metric_column", "type_hint": "STRING", "description": ["Column to aggregate"]}},
+    {{"name": "table", "type_hint": "STRING", "description": ["Table to query"]}},
+    {{"name": "n", "type_hint": "INTEGER", "description": ["Number of results"]}}
+  ],
+  "usage_guidance": ["Use for any top-N ranking query"]
+}}
+```
+
+### Pattern 2: Date Range Filter
+```json
+{{
+  "type": "add_example_query",
+  "pattern_name": "date_range_filter",
+  "question": ["[Metric] between [start_date] and [end_date]"],
+  "sql": [
+    "SELECT :columns",
+    "FROM :table",
+    "WHERE :date_column >= DATE ':start_date'",
+    "AND :date_column <= DATE ':end_date'"
+  ],
+  "parameters": [
+    {{"name": "columns", "type_hint": "STRING", "description": ["Columns to select"]}},
+    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
+    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column to filter"]}},
+    {{"name": "start_date", "type_hint": "DATE", "description": ["Start date (YYYY-MM-DD)"]}},
+    {{"name": "end_date", "type_hint": "DATE", "description": ["End date (YYYY-MM-DD)"]}}
+  ],
+  "usage_guidance": ["Use for date range filtering"]
+}}
+```
+
+### Pattern 3: Last N Days/Weeks/Months
+```json
+{{
+  "type": "add_example_query",
+  "pattern_name": "last_n_periods",
+  "question": ["[Metric] in the last N [days/weeks/months]"],
+  "sql": [
+    "SELECT :columns",
+    "FROM :table",
+    "WHERE :date_column >= DATE_SUB(CURRENT_DATE(), :n)"
+  ],
+  "parameters": [
+    {{"name": "columns", "type_hint": "STRING", "description": ["Columns to select"]}},
+    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
+    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}},
+    {{"name": "n", "type_hint": "INTEGER", "description": ["Number of days/weeks/months"]}}
+  ],
+  "usage_guidance": ["Use for rolling window queries"]
+}}
+```
+
+### Pattern 4: Year-over-Year Comparison
+```json
+{{
+  "type": "add_example_query",
+  "pattern_name": "yoy_comparison",
+  "question": ["Compare [metric] this year vs last year"],
+  "sql": [
+    "WITH current_year AS (",
+    "  SELECT SUM(:metric) as current_total",
+    "  FROM :table",
+    "  WHERE YEAR(:date_column) = YEAR(CURRENT_DATE())",
+    "),",
+    "last_year AS (",
+    "  SELECT SUM(:metric) as last_total",
+    "  FROM :table",
+    "  WHERE YEAR(:date_column) = YEAR(CURRENT_DATE()) - 1",
+    ")",
+    "SELECT current_total, last_total,",
+    "  (current_total - last_total) / last_total * 100 as yoy_change_pct",
+    "FROM current_year, last_year"
+  ],
+  "parameters": [
+    {{"name": "metric", "type_hint": "STRING", "description": ["Metric column to compare"]}},
+    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
+    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}}
+  ],
+  "usage_guidance": ["Use for year-over-year comparisons"]
+}}
+```
+
+### Pattern 5: Group by Time Period
+```json
+{{
+  "type": "add_example_query",
+  "pattern_name": "group_by_time",
+  "question": ["[Metric] by [day/week/month/year]"],
+  "sql": [
+    "SELECT DATE_TRUNC(':period', :date_column) as period,",
+    "  SUM(:metric) as total",
+    "FROM :table",
+    "GROUP BY 1",
+    "ORDER BY 1"
+  ],
+  "parameters": [
+    {{"name": "period", "type_hint": "STRING", "description": ["Time period: day, week, month, year"]}},
+    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}},
+    {{"name": "metric", "type_hint": "STRING", "description": ["Metric to aggregate"]}},
+    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}}
+  ],
+  "usage_guidance": ["Use for time series aggregation"]
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## FAILED QUESTION TO ANALYZE
+═══════════════════════════════════════════════════════════════════════════════
+
+**Question:**
+{question}
+
+**Expected SQL:**
+{expected_sql}
+
+**Genie's Generated SQL:**
+{genie_sql}
+
+**Current Space Configuration:**
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Think through these questions:
+
+1. **Pattern Recognition:** What SQL pattern does the expected SQL demonstrate?
+   - Is it a ranking query (TOP N)?
+   - Is it a date-based query (date ranges, rolling windows)?
+   - Is it a comparison query (vs previous period)?
+   - Is it using CTEs, window functions, or subqueries?
+
+2. **Existing Coverage:** Is this pattern already in the example_question_sqls?
+   - Check the current space config for similar patterns
+   - If similar pattern exists, don't duplicate it
+
+3. **Generalizability:** Can this be turned into a reusable template?
+   - Identify the variable parts (columns, tables, dates, etc.)
+   - Create parameters for each variable part
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON with this EXACT structure:
+
+```json
+{{
+  "analysis": {{
+    "query_pattern": "Description of the SQL pattern (e.g., 'top N by metric with date filter')",
+    "pattern_exists": true | false,
+    "can_be_generalized": true | false,
+    "reasoning": "Explanation of the pattern analysis"
+  }},
+  "needs_sample_query": true | false,
+  "recommended_fixes": [
+    {{
+      "type": "add_example_query",
+      "pattern_name": "descriptive_pattern_name",
+      "question": ["Parameterized question with [placeholders]"],
+      "sql": [
+        "SELECT :param1",
+        "FROM :table",
+        "WHERE :condition"
+      ],
+      "parameters": [
+        {{"name": "param1", "type_hint": "STRING", "description": ["Description"]}},
+        {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
+        {{"name": "condition", "type_hint": "STRING", "description": ["Filter condition"]}}
+      ],
+      "usage_guidance": ["When to use this pattern"],
+      "reasoning": "Why this pattern is needed"
+    }}
+  ]
+}}
+```
+
+If NO sample query is needed:
+```json
+{{
+  "analysis": {{
+    "query_pattern": "Description of pattern",
+    "pattern_exists": true,
+    "can_be_generalized": false,
+    "reasoning": "Similar pattern already exists / Cannot be generalized / Issue is elsewhere"
+  }},
+  "needs_sample_query": false,
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Use Spark SQL syntax (DATE 'YYYY-MM-DD' for dates, single quotes for strings)
+- Make patterns as general as possible
+- Include all necessary parameters with clear descriptions
+
+Return ONLY valid JSON. No additional text.

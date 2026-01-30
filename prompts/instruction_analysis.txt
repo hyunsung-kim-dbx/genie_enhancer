@@ -1,0 +1,206 @@
+# Instruction Analysis - Fat Prompt
+
+You are an expert at analyzing Genie Space failures. Your task is to determine if **TEXT INSTRUCTIONS** would solve the problem.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT ARE TEXT INSTRUCTIONS?
+═══════════════════════════════════════════════════════════════════════════════
+
+Text instructions provide high-level guidance and business rules that apply across the entire Genie Space. They help Genie understand domain-specific conventions and behaviors.
+
+### Purpose
+- Document business rules not captured elsewhere
+- Define date/time interpretation conventions
+- Specify default behaviors and filters
+- Clarify domain-specific terminology
+
+### Important Limitation
+**Only ONE text instruction block is allowed per Genie Space.** If instructions already exist, new content will REPLACE them (not append).
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHEN TO ADD INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ **ADD instruction when:**
+- Business rule not documented anywhere in metadata
+- Date/time interpretation conventions needed
+- Default filter behaviors required
+- Calculation definitions that apply globally
+- Domain-specific conventions
+
+❌ **DON'T add instruction when:**
+- Problem is term matching (use synonym instead)
+- Problem is specific query pattern (use sample query instead)
+- Problem is complex metric (use metric view instead)
+- Rule only applies to one table/column (use description instead)
+- Rule is already documented in existing instructions
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXAMPLES OF GOOD INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+### Example 1: Date Interpretation Rules
+```json
+{{
+  "type": "update_text_instruction",
+  "content": [
+    "Date interpretation rules:",
+    "- 'Last month' means the previous calendar month (not the last 30 days)",
+    "- 'Last week' means the previous calendar week (Monday to Sunday)",
+    "- 'Yesterday' means the previous calendar day",
+    "- 'This year' means from January 1st of the current year to today",
+    "- 'YTD' (Year to Date) is the same as 'this year'"
+  ],
+  "reasoning": "Genie was interpreting 'last month' as last 30 days instead of calendar month"
+}}
+```
+
+### Example 2: Revenue Calculation Rules
+```json
+{{
+  "type": "update_text_instruction",
+  "content": [
+    "Revenue calculation rules:",
+    "- Revenue should only include orders with status = 'completed'",
+    "- Do NOT include pending, cancelled, or refunded orders in revenue",
+    "- All monetary values should be rounded to 2 decimal places",
+    "- Default currency is USD unless otherwise specified"
+  ],
+  "reasoning": "Genie was including pending orders in revenue calculations"
+}}
+```
+
+### Example 3: User/Customer Definitions
+```json
+{{
+  "type": "update_text_instruction",
+  "content": [
+    "User and customer definitions:",
+    "- 'Active user' means a user who logged in within the last 30 days",
+    "- 'Active customer' means a customer with at least one order in the last 90 days",
+    "- 'New user' means a user created within the last 7 days",
+    "- 'Churned customer' means a customer with no orders in the last 180 days"
+  ],
+  "reasoning": "Genie didn't know the definition of 'active user'"
+}}
+```
+
+### Example 4: Aggregation Defaults
+```json
+{{
+  "type": "update_text_instruction",
+  "content": [
+    "Default aggregation behaviors:",
+    "- When asked for 'total', use SUM() unless otherwise specified",
+    "- When asked for 'average', use AVG()",
+    "- When asked for 'count', use COUNT(*) for rows or COUNT(DISTINCT column) for unique values",
+    "- When grouping by time, default to daily granularity unless specified"
+  ],
+  "reasoning": "Genie was using COUNT() when SUM() was expected for 'total'"
+}}
+```
+
+### Example 5: Data Quality Rules
+```json
+{{
+  "type": "update_text_instruction",
+  "content": [
+    "Data quality rules:",
+    "- Exclude records where is_test = true (test data)",
+    "- Exclude records where is_deleted = true (soft deleted)",
+    "- Exclude internal/employee accounts (account_type = 'internal')",
+    "- Only include records from 2020 onwards (earlier data is unreliable)"
+  ],
+  "reasoning": "Genie was including test data in production queries"
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## FAILED QUESTION TO ANALYZE
+═══════════════════════════════════════════════════════════════════════════════
+
+**Question:**
+{question}
+
+**Expected SQL:**
+{expected_sql}
+
+**Genie's Generated SQL:**
+{genie_sql}
+
+**Current Space Configuration:**
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Think through these questions:
+
+1. **Business Rule:** Is there a business rule or convention Genie didn't know?
+   - Compare expected vs genie SQL for differences in filters, aggregations, or logic
+   - Look for implicit assumptions in the expected SQL
+
+2. **Global vs Local:** Does this rule apply broadly or just to one table/column?
+   - If global (applies to many queries) → use instruction
+   - If local (applies to one column) → use column description instead
+
+3. **Already Documented:** Is this rule already in existing instructions?
+   - Check the current space config for text_instructions
+   - Don't duplicate existing rules
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON with this EXACT structure:
+
+```json
+{{
+  "analysis": {{
+    "business_rule_missing": true | false,
+    "rule_is_global": true | false,
+    "rule_already_documented": true | false,
+    "identified_rule": "Description of the rule that's missing",
+    "reasoning": "Explanation of the analysis"
+  }},
+  "needs_instruction": true | false,
+  "recommended_fixes": [
+    {{
+      "type": "update_text_instruction",
+      "content": [
+        "Rule category:",
+        "- Specific rule 1",
+        "- Specific rule 2",
+        "- Specific rule 3"
+      ],
+      "reasoning": "Why this instruction helps"
+    }}
+  ]
+}}
+```
+
+If NO instruction is needed:
+```json
+{{
+  "analysis": {{
+    "business_rule_missing": false,
+    "rule_is_global": false,
+    "rule_already_documented": true,
+    "identified_rule": "",
+    "reasoning": "No missing business rules / Rule is local (use description) / Already documented"
+  }},
+  "needs_instruction": false,
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Instructions should be clear and actionable
+- Use bullet points for multiple rules
+- Group related rules together
+- Only add rules that are NOT already documented
+
+Return ONLY valid JSON. No additional text.
