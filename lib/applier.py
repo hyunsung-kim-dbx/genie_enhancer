@@ -76,8 +76,17 @@ class BatchApplier:
 
         # Load current config
         logger.info("Loading current space configuration...")
-        config_before = self.space_api.export_space(space_id)
+        space_data = self.space_api.export_space(space_id)
+        config_before = space_data.get("serialized_space_parsed", {})
         config_after = copy.deepcopy(config_before)
+
+        # Log available tables for debugging
+        tables = config_before.get("data_sources", {}).get("tables", [])
+        logger.info(f"Space has {len(tables)} tables:")
+        for t in tables[:10]:  # Show first 10
+            logger.info(f"  - {t.get('identifier', 'N/A')}")
+        if len(tables) > 10:
+            logger.info(f"  ... and {len(tables) - 10} more")
 
         applied = []
         failed = []
@@ -108,7 +117,8 @@ class BatchApplier:
         if applied and not dry_run:
             logger.info(f"\nUpdating Genie Space with {len(applied)} changes...")
             try:
-                self.space_api.update_space(space_id, config_after)
+                # Convert dict to JSON string for API
+                self.space_api.update_space(space_id, json.dumps(config_after))
                 logger.info("✅ Genie Space updated successfully")
             except Exception as e:
                 logger.error(f"❌ Failed to update space: {e}")
@@ -165,93 +175,135 @@ class BatchApplier:
             return False
 
     # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def _find_table(self, config: Dict, table_ref: str) -> Optional[Dict]:
+        """
+        Find a table in config by identifier or table name.
+
+        Args:
+            config: Space configuration
+            table_ref: Table reference (can be full identifier or just table name)
+
+        Returns:
+            Table dict if found, None otherwise
+        """
+        tables = config.get("data_sources", {}).get("tables", [])
+
+        for table in tables:
+            identifier = table.get("identifier", "")
+            # Exact match on identifier
+            if identifier == table_ref:
+                return table
+            # Match on table name part (last segment of identifier)
+            table_name = identifier.split(".")[-1] if identifier else ""
+            if table_name and table_name.lower() == table_ref.lower():
+                return table
+            # Partial match (table_ref is contained in identifier)
+            if table_ref and table_ref.lower() in identifier.lower():
+                return table
+
+        return None
+
+    # =========================================================================
     # Fix Application Methods
     # =========================================================================
 
     def _add_synonym(self, config: Dict, fix: Dict) -> bool:
         """Add synonym to a column."""
-        table_id = fix.get("table")
+        table_ref = fix.get("table")
         column_name = fix.get("column")
         synonym = fix.get("synonym")
 
-        if not all([table_id, column_name, synonym]):
+        if not all([table_ref, column_name, synonym]):
+            logger.debug(f"_add_synonym: missing required field - table={table_ref}, column={column_name}, synonym={synonym}")
             return False
 
-        tables = config.setdefault("data_sources", {}).setdefault("tables", [])
-        for table in tables:
-            if table.get("identifier") == table_id:
-                column_configs = table.setdefault("column_configs", [])
-                column_config = next(
-                    (c for c in column_configs if c.get("column_name") == column_name),
-                    None
-                )
-                if not column_config:
-                    column_config = {"column_name": column_name}
-                    column_configs.append(column_config)
+        table = self._find_table(config, table_ref)
+        if not table:
+            logger.debug(f"_add_synonym: table not found: {table_ref}")
+            return False
 
-                synonyms = column_config.setdefault("synonyms", [])
-                if synonym not in synonyms:
-                    synonyms.append(synonym)
-                return True
-        return False
+        column_configs = table.setdefault("column_configs", [])
+        column_config = next(
+            (c for c in column_configs if c.get("column_name") == column_name),
+            None
+        )
+        if not column_config:
+            column_config = {"column_name": column_name}
+            column_configs.append(column_config)
+
+        synonyms = column_config.setdefault("synonyms", [])
+        if synonym not in synonyms:
+            synonyms.append(synonym)
+        return True
 
     def _delete_synonym(self, config: Dict, fix: Dict) -> bool:
         """Delete synonym from a column."""
-        table_id = fix.get("table")
+        table_ref = fix.get("table")
         column_name = fix.get("column")
         synonym = fix.get("synonym")
 
-        tables = config.get("data_sources", {}).get("tables", [])
-        for table in tables:
-            if table.get("identifier") == table_id:
-                column_configs = table.get("column_configs", [])
-                for col in column_configs:
-                    if col.get("column_name") == column_name:
-                        synonyms = col.get("synonyms", [])
-                        if synonym in synonyms:
-                            synonyms.remove(synonym)
-                            return True
+        if not all([table_ref, column_name, synonym]):
+            return False
+
+        table = self._find_table(config, table_ref)
+        if not table:
+            return False
+
+        column_configs = table.get("column_configs", [])
+        for col in column_configs:
+            if col.get("column_name") == column_name:
+                synonyms = col.get("synonyms", [])
+                if synonym in synonyms:
+                    synonyms.remove(synonym)
+                    return True
         return False
 
     def _add_column_description(self, config: Dict, fix: Dict) -> bool:
         """Add or update column description."""
-        table_id = fix.get("table")
+        table_ref = fix.get("table")
         column_name = fix.get("column")
         description = fix.get("description")
 
-        if not all([table_id, column_name, description]):
+        if not all([table_ref, column_name, description]):
+            logger.debug(f"_add_column_description: missing required field - table={table_ref}, column={column_name}")
             return False
 
-        tables = config.setdefault("data_sources", {}).setdefault("tables", [])
-        for table in tables:
-            if table.get("identifier") == table_id:
-                column_configs = table.setdefault("column_configs", [])
-                column_config = next(
-                    (c for c in column_configs if c.get("column_name") == column_name),
-                    None
-                )
-                if not column_config:
-                    column_config = {"column_name": column_name}
-                    column_configs.append(column_config)
+        table = self._find_table(config, table_ref)
+        if not table:
+            logger.debug(f"_add_column_description: table not found: {table_ref}")
+            return False
 
-                column_config["description"] = [description] if isinstance(description, str) else description
-                return True
-        return False
+        column_configs = table.setdefault("column_configs", [])
+        column_config = next(
+            (c for c in column_configs if c.get("column_name") == column_name),
+            None
+        )
+        if not column_config:
+            column_config = {"column_name": column_name}
+            column_configs.append(column_config)
+
+        column_config["description"] = [description] if isinstance(description, str) else description
+        return True
 
     def _add_table_description(self, config: Dict, fix: Dict) -> bool:
         """Add or update table description."""
-        table_id = fix.get("table")
+        table_ref = fix.get("table")
         description = fix.get("description")
 
-        if not all([table_id, description]):
+        if not all([table_ref, description]):
+            logger.debug(f"_add_table_description: missing required field - table={table_ref}")
             return False
 
-        tables = config.setdefault("data_sources", {}).setdefault("tables", [])
-        for table in tables:
-            if table.get("identifier") == table_id:
-                table["description"] = [description] if isinstance(description, str) else description
-                return True
-        return False
+        table = self._find_table(config, table_ref)
+        if not table:
+            logger.debug(f"_add_table_description: table not found: {table_ref}")
+            return False
+
+        table["description"] = [description] if isinstance(description, str) else description
+        return True
 
     def _add_example_query(self, config: Dict, fix: Dict) -> bool:
         """Add example query."""
@@ -358,7 +410,9 @@ AS $$
 
         tables = config.get("data_sources", {}).get("tables", [])
         for i, table in enumerate(tables):
-            if table.get("identifier") == metric_view_name:
+            identifier = table.get("identifier", "")
+            # Match by exact identifier or table name
+            if identifier == metric_view_name or identifier.endswith(f".{metric_view_name}"):
                 tables.pop(i)
                 return True
         return False
