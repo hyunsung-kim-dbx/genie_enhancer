@@ -1,131 +1,91 @@
-# Instruction Analysis - Fat Prompt
+# Instruction Analysis - Context-Informed Fix Generation
 
-You are an expert at analyzing Genie Space failures. Your task is to determine if **TEXT INSTRUCTIONS** would solve the problem.
-
-═══════════════════════════════════════════════════════════════════════════════
-## WHAT ARE TEXT INSTRUCTIONS?
-═══════════════════════════════════════════════════════════════════════════════
-
-Text instructions provide high-level guidance and business rules that apply across the entire Genie Space. They help Genie understand domain-specific conventions and behaviors.
-
-### Purpose
-- Document business rules not captured elsewhere
-- Define date/time interpretation conventions
-- Specify default behaviors and filters
-- Clarify domain-specific terminology
-
-### Important Limitation
-**Only ONE text instruction block is allowed per Genie Space.** If instructions already exist, new content will REPLACE them (not append).
+You are a Genie Space expert analyzing a benchmark failure. Generate **TEXT INSTRUCTION fixes** informed by the FULL domain context.
 
 ═══════════════════════════════════════════════════════════════════════════════
-## WHEN TO ADD INSTRUCTIONS
+## DOMAIN CONTEXT (All Benchmarks)
 ═══════════════════════════════════════════════════════════════════════════════
+
+These are ALL the questions users will ask (korean_question) and their expected SQL.
+Use this to understand:
+- What business rules are applied consistently across queries
+- What date conventions are used ("최근 7일", "30일", etc.)
+- What default filters appear repeatedly (game_code, status, etc.)
+- What calculation patterns are standard
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## BEST PRACTICES REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Text Instructions?
+
+Text instructions provide high-level guidance and business rules that apply across the entire Genie Space. They help Genie understand domain-specific conventions.
+
+**Important:** Only ONE text instruction block is allowed. New content REPLACES existing (not appends).
+
+### When to Add Instructions
 
 ✅ **ADD instruction when:**
-- Business rule not documented anywhere in metadata
+- Business rule applied consistently but not documented
 - Date/time interpretation conventions needed
-- Default filter behaviors required
+- Default filter behaviors (game_code, date ranges)
 - Calculation definitions that apply globally
-- Domain-specific conventions
+- Data deduplication rules (ROW_NUMBER patterns)
 
 ❌ **DON'T add instruction when:**
 - Problem is term matching (use synonym instead)
 - Problem is specific query pattern (use sample query instead)
-- Problem is complex metric (use metric view instead)
-- Rule only applies to one table/column (use description instead)
-- Rule is already documented in existing instructions
+- Rule only applies to one column (use column description instead)
 
-═══════════════════════════════════════════════════════════════════════════════
-## EXAMPLES OF GOOD INSTRUCTIONS
-═══════════════════════════════════════════════════════════════════════════════
+### Instruction Categories for This Domain
 
-### Example 1: Date Interpretation Rules
-```json
-{{
-  "type": "update_text_instruction",
-  "content": [
-    "Date interpretation rules:",
-    "- 'Last month' means the previous calendar month (not the last 30 days)",
-    "- 'Last week' means the previous calendar week (Monday to Sunday)",
-    "- 'Yesterday' means the previous calendar day",
-    "- 'This year' means from January 1st of the current year to today",
-    "- 'YTD' (Year to Date) is the same as 'this year'"
-  ],
-  "reasoning": "Genie was interpreting 'last month' as last 30 days instead of calendar month"
-}}
+**1. Default Filters (from benchmark patterns):**
+```
+- 기본 게임 필터: game_code = 'inzoi' 적용
+- 기본 조회 기간: 최근 30일 (별도 지정 없으면)
 ```
 
-### Example 2: Revenue Calculation Rules
-```json
-{{
-  "type": "update_text_instruction",
-  "content": [
-    "Revenue calculation rules:",
-    "- Revenue should only include orders with status = 'completed'",
-    "- Do NOT include pending, cancelled, or refunded orders in revenue",
-    "- All monetary values should be rounded to 2 decimal places",
-    "- Default currency is USD unless otherwise specified"
-  ],
-  "reasoning": "Genie was including pending orders in revenue calculations"
-}}
+**2. Date Interpretation (Korean → SQL):**
+```
+- '최근 7일' = event_date >= CURRENT_DATE - INTERVAL 7 DAYS
+- '최근 30일' = event_date >= CURRENT_DATE - INTERVAL 30 DAYS
+- '일주일' = 7일
+- '한 달' = 30일
 ```
 
-### Example 3: User/Customer Definitions
-```json
-{{
-  "type": "update_text_instruction",
-  "content": [
-    "User and customer definitions:",
-    "- 'Active user' means a user who logged in within the last 30 days",
-    "- 'Active customer' means a customer with at least one order in the last 90 days",
-    "- 'New user' means a user created within the last 7 days",
-    "- 'Churned customer' means a customer with no orders in the last 180 days"
-  ],
-  "reasoning": "Genie didn't know the definition of 'active user'"
-}}
+**3. Data Deduplication (snapshot tables):**
+```
+- store_appreviews, community_discussions_* 테이블은 스냅샷 데이터
+- ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY event_date DESC) 로 최신 데이터만 사용
+- WHERE rn = 1 필터 적용
 ```
 
-### Example 4: Aggregation Defaults
-```json
-{{
-  "type": "update_text_instruction",
-  "content": [
-    "Default aggregation behaviors:",
-    "- When asked for 'total', use SUM() unless otherwise specified",
-    "- When asked for 'average', use AVG()",
-    "- When asked for 'count', use COUNT(*) for rows or COUNT(DISTINCT column) for unique values",
-    "- When grouping by time, default to daily granularity unless specified"
-  ],
-  "reasoning": "Genie was using COUNT() when SUM() was expected for 'total'"
-}}
+**4. Platform-Specific Tables:**
+```
+- Discord 데이터: message, reaction, channel_list 테이블 사용
+- Steam 데이터: store_appreviews, steam_apps, community_discussions_* 테이블 사용
+- 크로스 플랫폼 질문: UNION으로 결합
 ```
 
-### Example 5: Data Quality Rules
-```json
-{{
-  "type": "update_text_instruction",
-  "content": [
-    "Data quality rules:",
-    "- Exclude records where is_test = true (test data)",
-    "- Exclude records where is_deleted = true (soft deleted)",
-    "- Exclude internal/employee accounts (account_type = 'internal')",
-    "- Only include records from 2020 onwards (earlier data is unreliable)"
-  ],
-  "reasoning": "Genie was including test data in production queries"
-}}
+**5. Aggregation Conventions:**
+```
+- 리액션/추천 집계 시 COALESCE(SUM(count), 0) 사용 (NULL → 0)
+- 소수점 반올림: ROUND(value, 2)
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-## FAILED QUESTION TO ANALYZE
+## FAILED BENCHMARK TO FIX
 ═══════════════════════════════════════════════════════════════════════════════
 
-**Question:**
+**Korean Question (what user asked):**
 {question}
 
-**Expected SQL:**
+**Expected SQL (correct answer):**
 {expected_sql}
 
-**Genie's Generated SQL:**
+**Genie's Generated SQL (what Genie produced):**
 {genie_sql}
 
 **Current Space Configuration:**
@@ -135,44 +95,51 @@ Text instructions provide high-level guidance and business rules that apply acro
 ## YOUR ANALYSIS
 ═══════════════════════════════════════════════════════════════════════════════
 
-Think through these questions:
+Think through:
 
-1. **Business Rule:** Is there a business rule or convention Genie didn't know?
-   - Compare expected vs genie SQL for differences in filters, aggregations, or logic
-   - Look for implicit assumptions in the expected SQL
+1. **Business Rule Analysis:**
+   - Compare expected SQL vs Genie SQL
+   - What rule did Genie miss? (filter, date handling, deduplication, etc.)
+   - Is this rule applied in OTHER benchmarks too?
 
-2. **Global vs Local:** Does this rule apply broadly or just to one table/column?
-   - If global (applies to many queries) → use instruction
-   - If local (applies to one column) → use column description instead
+2. **Cross-Benchmark Patterns:**
+   - Scan ALL benchmarks for this same rule
+   - Count how many benchmarks use this pattern
+   - High frequency = important rule to document
 
-3. **Already Documented:** Is this rule already in existing instructions?
-   - Check the current space config for text_instructions
-   - Don't duplicate existing rules
+3. **Existing Instructions:**
+   - Is this rule already in text_instructions?
+   - If yes, does it need reinforcement or clarification?
+
+4. **Global vs Local:**
+   - Does this rule apply to many queries? → instruction
+   - Does it apply to one column? → column description instead
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════════════════
 
-Return JSON with this EXACT structure:
+Return JSON:
 
 ```json
 {{
   "analysis": {{
-    "business_rule_missing": true | false,
-    "rule_is_global": true | false,
+    "missing_rule": "Description of the rule Genie missed",
+    "rule_frequency": "Number of benchmarks using this rule",
+    "rule_category": "default_filter | date_convention | deduplication | aggregation | platform",
     "rule_already_documented": true | false,
-    "identified_rule": "Description of the rule that's missing",
-    "reasoning": "Explanation of the analysis"
+    "rule_is_global": true | false,
+    "reasoning": "Explanation"
   }},
   "needs_instruction": true | false,
   "recommended_fixes": [
     {{
       "type": "update_text_instruction",
       "content": [
-        "Rule category:",
-        "- Specific rule 1",
-        "- Specific rule 2",
-        "- Specific rule 3"
+        "## 규칙 카테고리",
+        "- 구체적인 규칙 1",
+        "- 구체적인 규칙 2",
+        "- 구체적인 규칙 3"
       ],
       "reasoning": "Why this instruction helps"
     }}
@@ -184,11 +151,12 @@ If NO instruction is needed:
 ```json
 {{
   "analysis": {{
-    "business_rule_missing": false,
-    "rule_is_global": false,
+    "missing_rule": "",
+    "rule_frequency": 0,
+    "rule_category": "",
     "rule_already_documented": true,
-    "identified_rule": "",
-    "reasoning": "No missing business rules / Rule is local (use description) / Already documented"
+    "rule_is_global": false,
+    "reasoning": "Rule already documented / Rule is local (use description) / Issue is elsewhere"
   }},
   "needs_instruction": false,
   "recommended_fixes": []
@@ -198,9 +166,10 @@ If NO instruction is needed:
 ═══════════════════════════════════════════════════════════════════════════════
 
 **IMPORTANT:**
-- Instructions should be clear and actionable
-- Use bullet points for multiple rules
-- Group related rules together
-- Only add rules that are NOT already documented
+- Instructions should cover rules that help MULTIPLE benchmarks
+- Use Korean for instruction content
+- Be specific and actionable
+- Include examples where helpful
+- Remember: only ONE text_instruction block allowed (this replaces existing)
 
 Return ONLY valid JSON. No additional text.

@@ -1,196 +1,98 @@
-# Metadata Analysis - Fat Prompt
+# Metadata Analysis - Context-Informed Fix Generation
 
-You are an expert at analyzing Genie Space failures. Your task is to determine if **METADATA improvements** (synonyms, descriptions) would solve the problem.
-
-═══════════════════════════════════════════════════════════════════════════════
-## WHAT IS METADATA?
-═══════════════════════════════════════════════════════════════════════════════
-
-Metadata helps Genie understand your data. Without proper metadata, Genie can't match user questions to the right tables/columns.
-
-### Types of Metadata Fixes
-
-1. **Synonyms** - Map user terms to column names
-2. **Column Descriptions** - Explain what a column contains and when to use it
-3. **Table Descriptions** - Explain table scope, contents, and usage
+You are a Genie Space expert analyzing a benchmark failure. Generate **METADATA fixes** (synonyms, descriptions) informed by the FULL domain context.
 
 ═══════════════════════════════════════════════════════════════════════════════
-## SYNONYMS - CRITICAL FOR TERM MATCHING
+## DOMAIN CONTEXT (All Benchmarks)
 ═══════════════════════════════════════════════════════════════════════════════
 
-### When to Add Synonyms
+These are ALL the questions users will ask (korean_question) and their expected SQL.
+Use this to understand:
+- What Korean terms users use → potential synonyms
+- What tables/columns are important → need good descriptions
+- Common patterns across questions → domain vocabulary
 
-✅ **ADD synonym when:**
-- Question uses term X but column is named Y
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## BEST PRACTICES REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+### Synonyms (CRITICAL for Korean term matching)
+
+Synonyms map user terms to column names. Without synonyms, Genie can't match Korean questions to SQL columns.
+
+**When to add synonyms:**
+- Question uses Korean term X but column is named Y (English)
 - Business jargon differs from technical names
-- Abbreviations or acronyms in questions
-- Regional terminology variations
-- Common aliases users would say
+- Common variations users might say
 
-### Examples of Good Synonyms
-
-| Column Name | Synonyms to Add |
+**Good synonym examples:**
+| Column Name | Korean Synonyms |
 |-------------|-----------------|
-| `order_amount` | revenue, sales, total, price, order value |
-| `customer_id` | customer, cust_id, account, user id |
-| `created_at` | date, timestamp, when, time, created date |
-| `product_name` | product, item, sku, merchandise |
-| `is_active` | active, status, enabled, live |
+| `reaction.count` | 리액션, 리액션 수, 반응 |
+| `votes_up` | 추천, 추천 수, 업보트, 좋아요 |
+| `message_id` | 메시지, 글 |
+| `channel_name` | 채널, 채널명 |
+| `comment_id` | 댓글, 코멘트 |
 
-### Synonym Fix Format
+**Synonym fix format:**
 ```json
 {{
   "type": "add_synonym",
   "table": "catalog.schema.table_name",
   "column": "column_name",
-  "synonym": "user_term_from_question",
-  "reasoning": "Question uses 'user_term' but column is named 'column_name'"
+  "synonym": "한글_용어",
+  "reasoning": "Question uses '한글_용어' but column is 'column_name'"
 }}
 ```
 
-═══════════════════════════════════════════════════════════════════════════════
-## COLUMN DESCRIPTIONS - CLARIFY PURPOSE
-═══════════════════════════════════════════════════════════════════════════════
+### Column Descriptions
 
-### When to Add Column Description
+Descriptions clarify column purpose when names are ambiguous.
 
-✅ **ADD description when:**
-- Genie picked wrong column (similar names, unclear purpose)
-- Column name is ambiguous (e.g., "value", "amount", "status")
-- Business rules apply to the column
-- Units or format need clarification
+**Good description template:**
+"[What it represents]. Use for [purpose]. [Units/format if applicable]."
 
-### Good Column Description Template
-```
-"[What it represents]. Use for [purpose]. [Units/format if applicable]. [Business rules or exclusions]."
-```
-
-### Examples
-
-**Good:**
-- "Total order value in USD before tax and shipping. Use for revenue calculations."
-- "Customer account status: 'active', 'suspended', 'closed'. Use for filtering active customers."
-- "Date when the order was placed (UTC timezone). Use for time-based analysis."
-
-**Bad:**
-- "Order amount" (too vague)
-- "The status" (doesn't explain values)
-
-### Column Description Fix Format
+**Column description fix format:**
 ```json
 {{
   "type": "add_column_description",
   "table": "catalog.schema.table_name",
   "column": "column_name",
-  "description": ["Clear description following the template above"],
+  "description": ["Korean description of what this column contains and when to use it"],
   "reasoning": "Genie picked wrong column because purpose was unclear"
 }}
 ```
 
-═══════════════════════════════════════════════════════════════════════════════
-## TABLE DESCRIPTIONS - CLARIFY SCOPE
-═══════════════════════════════════════════════════════════════════════════════
+### Table Descriptions
 
-### When to Add Table Description
+Descriptions clarify table scope and when to use each table.
 
-✅ **ADD description when:**
-- Genie picked wrong table (multiple similar tables)
-- Table scope is unclear (what's included vs excluded)
-- Usage conditions exist (when to use this table vs another)
+**Good description template:**
+"[What data it contains]. Use for [use cases]. Does NOT include [exclusions]."
 
-### Good Table Description Template
-```
-"Contains [what data]. Each row represents [one X]. Use for [use cases]. Does NOT include [exclusions]. [Lifecycle info if relevant]."
-```
-
-### Examples
-
-**Good:**
-- "Contains all completed customer orders since 2020. Each row is one order transaction. Use for revenue analysis and purchase history. Does NOT include pending orders (use orders_pending table)."
-- "Daily aggregated website metrics. Each row is one day's totals. Use for trend analysis. Raw event data is in events table."
-
-**Bad:**
-- "Orders table" (too vague)
-- "Customer data" (doesn't explain scope)
-
-### Table Description Fix Format
+**Table description fix format:**
 ```json
 {{
   "type": "add_table_description",
   "table": "catalog.schema.table_name",
-  "description": ["Clear description following the template above"],
+  "description": ["Korean description of table scope and usage"],
   "reasoning": "Genie picked wrong table because scope was unclear"
 }}
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-## EXAMPLES OF METADATA FIXES
+## FAILED BENCHMARK TO FIX
 ═══════════════════════════════════════════════════════════════════════════════
 
-### Example 1: Missing Synonym
-**Question:** "What are the total sales by region?"
-**Expected SQL:** `SELECT region, SUM(order_amount) FROM orders...`
-**Genie SQL:** `SELECT region, COUNT(*) FROM orders...` (WRONG - counted rows instead of summing sales)
-
-**Analysis:** User said "sales" but column is "order_amount". Genie didn't know they're the same.
-
-**Fix:**
-```json
-{{
-  "type": "add_synonym",
-  "table": "catalog.schema.orders",
-  "column": "order_amount",
-  "synonym": "sales",
-  "reasoning": "Question uses 'sales' but column is named 'order_amount'"
-}}
-```
-
-### Example 2: Ambiguous Column
-**Question:** "Show me the customer status"
-**Expected SQL:** `SELECT customer_id, account_status FROM customers`
-**Genie SQL:** `SELECT customer_id, subscription_status FROM customers` (WRONG - picked wrong status column)
-
-**Analysis:** Multiple "status" columns exist. Need description to clarify which is which.
-
-**Fix:**
-```json
-{{
-  "type": "add_column_description",
-  "table": "catalog.schema.customers",
-  "column": "account_status",
-  "description": ["Customer account status: 'active', 'suspended', 'closed'. Use when asking about customer status or filtering active customers."],
-  "reasoning": "Multiple status columns exist, Genie picked wrong one"
-}}
-```
-
-### Example 3: Wrong Table
-**Question:** "How many orders yesterday?"
-**Expected SQL:** `SELECT COUNT(*) FROM orders WHERE date = CURRENT_DATE - 1`
-**Genie SQL:** `SELECT COUNT(*) FROM order_archive WHERE date = CURRENT_DATE - 1` (WRONG - archive is for old data)
-
-**Analysis:** Genie picked archive table instead of current orders table.
-
-**Fix:**
-```json
-{{
-  "type": "add_table_description",
-  "table": "catalog.schema.orders",
-  "description": ["Current orders from the last 90 days. Use for recent order analysis. For historical data older than 90 days, use order_archive table."],
-  "reasoning": "Genie picked archive table instead of current orders table"
-}}
-```
-
-═══════════════════════════════════════════════════════════════════════════════
-## FAILED QUESTION TO ANALYZE
-═══════════════════════════════════════════════════════════════════════════════
-
-**Question:**
+**Korean Question (what user asked):**
 {question}
 
-**Expected SQL:**
+**Expected SQL (correct answer):**
 {expected_sql}
 
-**Genie's Generated SQL:**
+**Genie's Generated SQL (what Genie produced):**
 {genie_sql}
 
 **Current Space Configuration:**
@@ -200,57 +102,46 @@ Metadata helps Genie understand your data. Without proper metadata, Genie can't 
 ## YOUR ANALYSIS
 ═══════════════════════════════════════════════════════════════════════════════
 
-Think through these questions:
+Think through:
 
-1. **Term Matching:** Are there words in the question that don't match column names?
-   - Compare question terms to column names in the config
-   - Look for business jargon, abbreviations, synonyms
+1. **Korean Term Matching:**
+   - What Korean terms appear in the question?
+   - Do they map to columns in the space config?
+   - Are synonyms needed?
 
-2. **Column Selection:** Did Genie pick the wrong column?
-   - Look at which columns were used in expected vs genie SQL
-   - Check if column descriptions exist and are clear
+2. **Cross-Benchmark Patterns:**
+   - Do similar Korean terms appear in other benchmarks?
+   - What columns do they consistently map to?
+   - Add synonyms that work across ALL benchmarks, not just this one.
 
-3. **Table Selection:** Did Genie pick the wrong table?
-   - Look at which tables were used in expected vs genie SQL
-   - Check if table descriptions explain when to use each table
-
-For each issue found, generate a specific fix.
+3. **Column/Table Selection:**
+   - Did Genie pick the wrong column or table?
+   - Would better descriptions help?
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════════════════
 
-Return JSON with this EXACT structure:
+Return JSON:
 
 ```json
 {{
   "analysis": {{
-    "term_matching_issues": ["list of terms in question that don't match column names"],
+    "korean_terms_in_question": ["리액션", "메시지", ...],
+    "term_mapping_issues": ["'리액션' not mapped to reaction.count"],
+    "cross_benchmark_patterns": ["'리액션' appears in 5 other benchmarks"],
     "wrong_column_selected": true | false,
     "wrong_table_selected": true | false,
-    "reasoning": "Explanation of the metadata issues found"
+    "reasoning": "Explanation"
   }},
   "needs_metadata": true | false,
   "recommended_fixes": [
     {{
       "type": "add_synonym",
-      "table": "catalog.schema.table",
-      "column": "column_name",
-      "synonym": "term_from_question",
-      "reasoning": "Question uses 'X' but column is 'Y'"
-    }},
-    {{
-      "type": "add_column_description",
-      "table": "catalog.schema.table",
-      "column": "column_name",
-      "description": ["Clear description"],
-      "reasoning": "Why this description helps"
-    }},
-    {{
-      "type": "add_table_description",
-      "table": "catalog.schema.table",
-      "description": ["Clear description"],
-      "reasoning": "Why this description helps"
+      "table": "sandbox.agent_poc.reaction",
+      "column": "count",
+      "synonym": "리액션",
+      "reasoning": "Question uses '리액션' which maps to reaction.count across 5 benchmarks"
     }}
   ]
 }}
@@ -260,10 +151,12 @@ If NO metadata fix is needed:
 ```json
 {{
   "analysis": {{
-    "term_matching_issues": [],
+    "korean_terms_in_question": [...],
+    "term_mapping_issues": [],
+    "cross_benchmark_patterns": [],
     "wrong_column_selected": false,
     "wrong_table_selected": false,
-    "reasoning": "Terms match, correct columns/tables were selected. Issue is elsewhere."
+    "reasoning": "All terms properly mapped. Issue is elsewhere."
   }},
   "needs_metadata": false,
   "recommended_fixes": []
@@ -272,6 +165,9 @@ If NO metadata fix is needed:
 
 ═══════════════════════════════════════════════════════════════════════════════
 
-**IMPORTANT:** Generate ALL relevant fixes. If there are multiple term matching issues, generate multiple synonym fixes. Be thorough!
+**IMPORTANT:**
+- Generate fixes that work across ALL benchmarks, not just this failure
+- Use Korean for synonyms and descriptions
+- Be thorough - missing synonyms cause repeated failures
 
 Return ONLY valid JSON. No additional text.

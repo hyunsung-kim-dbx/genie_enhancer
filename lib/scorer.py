@@ -30,7 +30,7 @@ class BenchmarkScorer:
         self,
         genie_client: GenieConversationalClient,
         llm_client,  # LLM client for answer comparison
-        sql_executor: SQLExecutor = None,  # Optional SQL executor for result comparison
+        sql_executor: SQLExecutor,  # REQUIRED: SQL executor for result comparison
         config: Dict = None
     ):
         """
@@ -39,7 +39,7 @@ class BenchmarkScorer:
         Args:
             genie_client: Client for asking Genie questions
             llm_client: LLM client for comparing answers
-            sql_executor: Optional SQL executor for running expected queries
+            sql_executor: SQL executor for running queries (REQUIRED - always compare actual results)
             config: Scorer configuration
                 - question_timeout: Timeout for Genie questions (default 120)
                 - parallel_workers: Number of parallel workers (0=sequential)
@@ -49,12 +49,16 @@ class BenchmarkScorer:
                 - save_debug_output: Save raw LLM responses to file (default False)
                 - debug_output_path: Path for debug output files
         """
+        if sql_executor is None:
+            raise ValueError("sql_executor is required - result comparison is mandatory")
+
         self.genie_client = genie_client
         self.llm_client = llm_client
         self.sql_executor = sql_executor
         self.config = config or {}
         self.prompt_loader = PromptLoader()
-        self.use_result_comparison = sql_executor is not None
+        # Always use result comparison - comparing actual data values
+        self.use_result_comparison = True
 
         # Debug mode settings
         self.debug_mode = self.config.get("debug_mode", False)
@@ -379,10 +383,11 @@ class BenchmarkScorer:
             if genie_result:
                 debug_info["genie_result_type"] = type(genie_result).__name__
 
-        # Execute expected SQL if executor available
+        # Execute expected SQL to get actual results (REQUIRED for result comparison)
         expected_result = None
-        if self.use_result_comparison and expected_sql:
-            logger.debug(f"Executing expected SQL for comparison...")
+        expected_execution_error = None
+        if expected_sql:
+            logger.info(f"  Executing expected SQL for result comparison...")
             try:
                 if self.debug_mode:
                     debug_info["timestamps"]["expected_sql_start"] = datetime.now().isoformat()
@@ -390,20 +395,22 @@ class BenchmarkScorer:
                 expected_execution = self.sql_executor.execute(expected_sql, timeout=60)
                 if expected_execution["status"] == "SUCCEEDED":
                     expected_result = expected_execution["result"]
-                    logger.debug(f"Expected query returned {expected_result['row_count']} rows")
+                    logger.info(f"  Expected query returned {expected_result.get('row_count', 'N/A')} rows")
                     if self.debug_mode:
                         debug_info["expected_result_rows"] = expected_result.get("row_count")
                         debug_info["stages"].append("expected_sql_executed")
                 else:
-                    logger.warning(f"Expected SQL execution failed: {expected_execution['error']}")
+                    expected_execution_error = expected_execution.get("error", "Unknown error")
+                    logger.warning(f"  Expected SQL execution failed: {expected_execution_error}")
                     if self.debug_mode:
-                        debug_info["expected_sql_error"] = expected_execution.get("error")
+                        debug_info["expected_sql_error"] = expected_execution_error
 
                 if self.debug_mode:
                     debug_info["timestamps"]["expected_sql_end"] = datetime.now().isoformat()
 
             except Exception as e:
-                logger.warning(f"Could not execute expected SQL: {e}")
+                expected_execution_error = str(e)
+                logger.warning(f"  Could not execute expected SQL: {e}")
                 if self.debug_mode:
                     debug_info["expected_sql_exception"] = str(e)
 
@@ -525,12 +532,15 @@ class BenchmarkScorer:
         """
         Compare expected vs actual answer using LLM judge.
 
+        PRIORITY: Always compare actual data results when available.
+        Fallback to SQL comparison only if result execution failed.
+
         Args:
             question: The question
             expected_sql: Expected SQL
             genie_sql: Genie's SQL
-            expected_result: Expected query result (optional)
-            genie_result: Genie's query result (optional)
+            expected_result: Expected query result (from executing expected_sql)
+            genie_result: Genie's query result (from Genie response)
 
         Returns:
             {
@@ -538,15 +548,29 @@ class BenchmarkScorer:
                 "confidence": "high" | "medium" | "low",
                 "reasoning": str,
                 "differences": List[str],
-                "semantic_equivalence": str
+                "semantic_equivalence": str,
+                "comparison_type": "results" | "sql"
             }
         """
-        # Determine what we're comparing
-        expected = expected_result or expected_sql
-        actual = genie_result or genie_sql
+        # PRIORITY: Compare actual results when available
+        # This catches cases where different SQL produces same results (should pass)
+        # And where similar SQL produces different results (should fail)
+        if expected_result and genie_result:
+            comparing_type = "results"
+            expected = expected_result
+            actual = genie_result
+            logger.info(f"  Comparing actual data RESULTS (expected: {expected_result.get('row_count', '?')} rows, genie: {genie_result.get('row_count', '?')} rows)")
+        else:
+            # Fallback to SQL comparison if results not available
+            comparing_type = "sql"
+            expected = expected_sql
+            actual = genie_sql
+            if not expected_result:
+                logger.warning(f"  ⚠️ Expected result not available - falling back to SQL comparison")
+            if not genie_result:
+                logger.warning(f"  ⚠️ Genie result not available - falling back to SQL comparison")
+            logger.info(f"  Comparing SQL structure (fallback)...")
 
-        comparing_type = "results" if (expected_result and genie_result) else "SQL"
-        logger.info(f"  Comparing {comparing_type}...")
         logger.debug(f"  Expected: {str(expected)[:200]}...")
         logger.debug(f"  Genie: {str(actual)[:200]}...")
 
@@ -577,8 +601,11 @@ class BenchmarkScorer:
             # Parse JSON response
             comparison_result = self._parse_comparison_result(response)
 
+            # Add comparison type to result
+            comparison_result["comparison_type"] = comparing_type
+
             # Enhanced logging
-            logger.info(f"  LLM verdict: passed={comparison_result.get('passed')}, confidence={comparison_result.get('confidence')}")
+            logger.info(f"  LLM verdict: passed={comparison_result.get('passed')}, confidence={comparison_result.get('confidence')}, type={comparing_type}")
             if comparison_result.get('_parse_error'):
                 logger.warning(f"  ⚠️ LLM response parsing had issues")
             if not comparison_result.get('passed'):

@@ -1,177 +1,129 @@
-# Sample Query Analysis - Fat Prompt
+# Sample Query Analysis - Context-Informed Fix Generation
 
-You are an expert at analyzing Genie Space failures. Your task is to determine if a **SAMPLE QUERY (example_question_sql)** would solve the problem.
+You are a Genie Space expert analyzing a benchmark failure. Generate **SAMPLE QUERY fixes** (example_question_sqls) informed by the FULL domain context.
 
 ═══════════════════════════════════════════════════════════════════════════════
-## WHAT ARE SAMPLE QUERIES?
+## DOMAIN CONTEXT (All Benchmarks)
 ═══════════════════════════════════════════════════════════════════════════════
+
+These are ALL the questions users will ask (korean_question) and their expected SQL.
+Use this to understand:
+- What query PATTERNS users need (Top N, date ranges, comparisons, etc.)
+- What SQL structures appear repeatedly → parameterizable templates
+- Common Korean question patterns → template questions
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## BEST PRACTICES REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Sample Queries?
 
 Sample queries (example_question_sqls) teach Genie query **PATTERNS**. They are parameterized templates, not specific answers.
 
-### Purpose
+**Purpose:**
 - Teach SQL patterns Genie doesn't know
-- Show how to structure complex queries
+- Show how to structure complex queries (CTEs, window functions)
 - Demonstrate date handling, ranking, comparisons
 
-### Key Concept: Parameterization
-Sample queries use `:parameter` syntax for variable parts:
-```sql
-SELECT :column FROM :table WHERE :date_col BETWEEN :start_date AND :end_date
-```
-
-═══════════════════════════════════════════════════════════════════════════════
-## WHEN TO ADD SAMPLE QUERIES
-═══════════════════════════════════════════════════════════════════════════════
+### When to Add Sample Queries
 
 ✅ **ADD sample query when:**
 - Query pattern not in existing examples
-- Complex SQL structure needed (CTEs, window functions, subqueries)
-- Specific date handling ("last week", "year to date", "previous month")
-- Ranking patterns (Top N, Bottom N, percentiles)
-- Comparison patterns (vs previous period, vs average)
-- Specific output format required
+- Complex SQL structure needed (CTEs, ROW_NUMBER, subqueries)
+- Specific date handling ("최근 7일", "지난 달")
+- Ranking patterns ("상위 N개", "가장 많은")
+- Comparison patterns ("비교", "추이")
 
 ❌ **DON'T add sample query when:**
 - Problem is term matching (use synonym instead)
-- Problem is complex metric (use metric view instead)
 - Problem is business rules (use instruction instead)
-- Similar pattern already exists in example_question_sqls
+- Similar pattern already exists
 
-═══════════════════════════════════════════════════════════════════════════════
-## SAMPLE QUERY PATTERNS TO TEACH
-═══════════════════════════════════════════════════════════════════════════════
+### Pattern Examples for This Domain
 
-### Pattern 1: Top N by Metric
+**Pattern 1: Top N by Metric (가장 많은, 상위)**
 ```json
 {{
-  "type": "add_example_query",
   "pattern_name": "top_n_by_metric",
-  "question": ["Top N [items] by [metric]"],
+  "question": ["[지표] 기준 상위 N개"],
   "sql": [
-    "SELECT :group_column, SUM(:metric_column) as total",
-    "FROM :table",
-    "GROUP BY :group_column",
-    "ORDER BY total DESC",
+    "SELECT :group_col, SUM(:metric_col) as total ",
+    "FROM :table ",
+    "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+    "GROUP BY :group_col ",
+    "ORDER BY total DESC ",
     "LIMIT :n"
   ],
   "parameters": [
-    {{"name": "group_column", "type_hint": "STRING", "description": ["Column to group by"]}},
-    {{"name": "metric_column", "type_hint": "STRING", "description": ["Column to aggregate"]}},
-    {{"name": "table", "type_hint": "STRING", "description": ["Table to query"]}},
-    {{"name": "n", "type_hint": "INTEGER", "description": ["Number of results"]}}
+    {{"name": "group_col", "type_hint": "STRING"}},
+    {{"name": "metric_col", "type_hint": "STRING"}},
+    {{"name": "n", "type_hint": "INTEGER"}}
   ],
-  "usage_guidance": ["Use for any top-N ranking query"]
+  "usage_guidance": ["'가장 많은', '상위', 'Top N' 질문에 사용"]
 }}
 ```
 
-### Pattern 2: Date Range Filter
+**Pattern 2: Daily Trend (추이, 일별)**
 ```json
 {{
-  "type": "add_example_query",
-  "pattern_name": "date_range_filter",
-  "question": ["[Metric] between [start_date] and [end_date]"],
+  "pattern_name": "daily_trend",
+  "question": ["[기간] 동안 일별 [지표] 추이"],
   "sql": [
-    "SELECT :columns",
-    "FROM :table",
-    "WHERE :date_column >= DATE ':start_date'",
-    "AND :date_column <= DATE ':end_date'"
+    "SELECT DATE(:date_col) as date, SUM(:metric_col) as total ",
+    "FROM :table ",
+    "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+    "GROUP BY DATE(:date_col) ",
+    "ORDER BY date"
   ],
-  "parameters": [
-    {{"name": "columns", "type_hint": "STRING", "description": ["Columns to select"]}},
-    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
-    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column to filter"]}},
-    {{"name": "start_date", "type_hint": "DATE", "description": ["Start date (YYYY-MM-DD)"]}},
-    {{"name": "end_date", "type_hint": "DATE", "description": ["End date (YYYY-MM-DD)"]}}
-  ],
-  "usage_guidance": ["Use for date range filtering"]
+  "usage_guidance": ["'추이', '트렌드', '일별' 질문에 사용"]
 }}
 ```
 
-### Pattern 3: Last N Days/Weeks/Months
+**Pattern 3: Latest Record Deduplication (스냅샷 테이블용)**
 ```json
 {{
-  "type": "add_example_query",
-  "pattern_name": "last_n_periods",
-  "question": ["[Metric] in the last N [days/weeks/months]"],
+  "pattern_name": "latest_record",
+  "question": ["[테이블]에서 최신 데이터 조회"],
   "sql": [
-    "SELECT :columns",
-    "FROM :table",
-    "WHERE :date_column >= DATE_SUB(CURRENT_DATE(), :n)"
+    "WITH latest AS ( ",
+    "  SELECT *, ROW_NUMBER() OVER (PARTITION BY :entity_id ORDER BY event_date DESC) as rn ",
+    "  FROM :table ",
+    "  WHERE event_date >= CURRENT_DATE - INTERVAL :days DAYS ",
+    ") ",
+    "SELECT * FROM latest WHERE rn = 1"
   ],
-  "parameters": [
-    {{"name": "columns", "type_hint": "STRING", "description": ["Columns to select"]}},
-    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
-    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}},
-    {{"name": "n", "type_hint": "INTEGER", "description": ["Number of days/weeks/months"]}}
-  ],
-  "usage_guidance": ["Use for rolling window queries"]
+  "usage_guidance": ["스냅샷 테이블(store_appreviews, community_discussions_*)에서 최신 데이터 조회 시 사용"]
 }}
 ```
 
-### Pattern 4: Year-over-Year Comparison
+**Pattern 4: Platform Comparison (비교)**
 ```json
 {{
-  "type": "add_example_query",
-  "pattern_name": "yoy_comparison",
-  "question": ["Compare [metric] this year vs last year"],
+  "pattern_name": "platform_comparison",
+  "question": ["[플랫폼] 간 [지표] 비교"],
   "sql": [
-    "WITH current_year AS (",
-    "  SELECT SUM(:metric) as current_total",
-    "  FROM :table",
-    "  WHERE YEAR(:date_column) = YEAR(CURRENT_DATE())",
-    "),",
-    "last_year AS (",
-    "  SELECT SUM(:metric) as last_total",
-    "  FROM :table",
-    "  WHERE YEAR(:date_column) = YEAR(CURRENT_DATE()) - 1",
-    ")",
-    "SELECT current_total, last_total,",
-    "  (current_total - last_total) / last_total * 100 as yoy_change_pct",
-    "FROM current_year, last_year"
+    "WITH discord_stats AS (...), steam_stats AS (...) ",
+    "SELECT * FROM discord_stats ",
+    "UNION ALL ",
+    "SELECT * FROM steam_stats"
   ],
-  "parameters": [
-    {{"name": "metric", "type_hint": "STRING", "description": ["Metric column to compare"]}},
-    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
-    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}}
-  ],
-  "usage_guidance": ["Use for year-over-year comparisons"]
-}}
-```
-
-### Pattern 5: Group by Time Period
-```json
-{{
-  "type": "add_example_query",
-  "pattern_name": "group_by_time",
-  "question": ["[Metric] by [day/week/month/year]"],
-  "sql": [
-    "SELECT DATE_TRUNC(':period', :date_column) as period,",
-    "  SUM(:metric) as total",
-    "FROM :table",
-    "GROUP BY 1",
-    "ORDER BY 1"
-  ],
-  "parameters": [
-    {{"name": "period", "type_hint": "STRING", "description": ["Time period: day, week, month, year"]}},
-    {{"name": "date_column", "type_hint": "STRING", "description": ["Date column"]}},
-    {{"name": "metric", "type_hint": "STRING", "description": ["Metric to aggregate"]}},
-    {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}}
-  ],
-  "usage_guidance": ["Use for time series aggregation"]
+  "usage_guidance": ["'비교', 'vs', '차이' 질문에 사용"]
 }}
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-## FAILED QUESTION TO ANALYZE
+## FAILED BENCHMARK TO FIX
 ═══════════════════════════════════════════════════════════════════════════════
 
-**Question:**
+**Korean Question (what user asked):**
 {question}
 
-**Expected SQL:**
+**Expected SQL (correct answer):**
 {expected_sql}
 
-**Genie's Generated SQL:**
+**Genie's Generated SQL (what Genie produced):**
 {genie_sql}
 
 **Current Space Configuration:**
@@ -181,54 +133,58 @@ SELECT :column FROM :table WHERE :date_col BETWEEN :start_date AND :end_date
 ## YOUR ANALYSIS
 ═══════════════════════════════════════════════════════════════════════════════
 
-Think through these questions:
+Think through:
 
-1. **Pattern Recognition:** What SQL pattern does the expected SQL demonstrate?
-   - Is it a ranking query (TOP N)?
-   - Is it a date-based query (date ranges, rolling windows)?
-   - Is it a comparison query (vs previous period)?
-   - Is it using CTEs, window functions, or subqueries?
+1. **Pattern Recognition:**
+   - What SQL pattern does the expected SQL use?
+   - Is it: Top N? Date range? Trend? Comparison? Deduplication?
+   - Does it use CTEs, window functions, complex joins?
 
-2. **Existing Coverage:** Is this pattern already in the example_question_sqls?
-   - Check the current space config for similar patterns
-   - If similar pattern exists, don't duplicate it
+2. **Cross-Benchmark Patterns:**
+   - Do other benchmarks use similar SQL patterns?
+   - Can this be generalized into a template that helps MULTIPLE benchmarks?
 
-3. **Generalizability:** Can this be turned into a reusable template?
-   - Identify the variable parts (columns, tables, dates, etc.)
-   - Create parameters for each variable part
+3. **Existing Coverage:**
+   - Is this pattern already in example_question_sqls?
+   - If similar exists, don't duplicate
+
+4. **Parameterization:**
+   - What parts can be made into parameters?
+   - Create a GENERAL template, not a specific query
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════════════════
 
-Return JSON with this EXACT structure:
+Return JSON:
 
 ```json
 {{
   "analysis": {{
-    "query_pattern": "Description of the SQL pattern (e.g., 'top N by metric with date filter')",
+    "query_pattern": "Description (e.g., 'Top N by metric with date filter')",
+    "sql_complexity": "simple | moderate | complex",
+    "similar_benchmarks": ["IDs of benchmarks with similar patterns"],
     "pattern_exists": true | false,
     "can_be_generalized": true | false,
-    "reasoning": "Explanation of the pattern analysis"
+    "reasoning": "Explanation"
   }},
   "needs_sample_query": true | false,
   "recommended_fixes": [
     {{
       "type": "add_example_query",
-      "pattern_name": "descriptive_pattern_name",
-      "question": ["Parameterized question with [placeholders]"],
+      "pattern_name": "descriptive_name",
+      "question": ["Korean question template with [placeholders]"],
       "sql": [
-        "SELECT :param1",
-        "FROM :table",
+        "SELECT :param1 ",
+        "FROM :table ",
         "WHERE :condition"
       ],
       "parameters": [
-        {{"name": "param1", "type_hint": "STRING", "description": ["Description"]}},
-        {{"name": "table", "type_hint": "STRING", "description": ["Table name"]}},
-        {{"name": "condition", "type_hint": "STRING", "description": ["Filter condition"]}}
+        {{"name": "param1", "type_hint": "STRING", "description": ["설명"]}},
+        {{"name": "table", "type_hint": "STRING", "description": ["테이블명"]}}
       ],
-      "usage_guidance": ["When to use this pattern"],
-      "reasoning": "Why this pattern is needed"
+      "usage_guidance": ["When to use this pattern in Korean"],
+      "reasoning": "Why this pattern helps"
     }}
   ]
 }}
@@ -238,10 +194,12 @@ If NO sample query is needed:
 ```json
 {{
   "analysis": {{
-    "query_pattern": "Description of pattern",
+    "query_pattern": "Description",
+    "sql_complexity": "simple",
+    "similar_benchmarks": [],
     "pattern_exists": true,
     "can_be_generalized": false,
-    "reasoning": "Similar pattern already exists / Cannot be generalized / Issue is elsewhere"
+    "reasoning": "Pattern already exists / Issue is elsewhere"
   }},
   "needs_sample_query": false,
   "recommended_fixes": []
@@ -251,8 +209,9 @@ If NO sample query is needed:
 ═══════════════════════════════════════════════════════════════════════════════
 
 **IMPORTANT:**
-- Use Spark SQL syntax (DATE 'YYYY-MM-DD' for dates, single quotes for strings)
-- Make patterns as general as possible
-- Include all necessary parameters with clear descriptions
+- Create templates that help MULTIPLE benchmarks, not just this one
+- Use Spark SQL syntax (DATE 'YYYY-MM-DD', single quotes)
+- SQL lines should end with space for formatting
+- Korean for question templates and usage_guidance
 
 Return ONLY valid JSON. No additional text.

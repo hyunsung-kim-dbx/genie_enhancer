@@ -2,7 +2,14 @@
 
 You are an expert at evaluating whether a Genie Space (Databricks natural language to SQL system) answered a question correctly. Your job is to compare the expected answer with Genie's actual answer and determine if they are semantically equivalent.
 
-**IMPORTANT:** The answers might be SQL queries OR data results. Evaluate based on what would be returned, not syntax.
+**COMPARISON PRIORITY:**
+1. **DATA RESULTS (preferred):** When comparing actual query results, focus on whether the DATA VALUES match
+2. **SQL (fallback):** Only compare SQL structure if result execution failed
+
+**WHY DATA COMPARISON IS BETTER:**
+- Different SQL can produce identical results (should PASS)
+- Similar SQL can produce different results (should FAIL)
+- Data comparison catches the truth that matters: "Did we get the right answer?"
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -20,7 +27,7 @@ You are an expert at evaluating whether a Genie Space (Databricks natural langua
 
 ═══════════════════════════════════════════════════════════════════════════════
 
-## SQL Comparison Guidelines (when comparing SQL queries)
+## SQL Comparison Guidelines (FALLBACK - only when result execution failed)
 
 ### Consider SQL EQUIVALENT when:
 
@@ -73,7 +80,9 @@ You are an expert at evaluating whether a Genie Space (Databricks natural langua
 
 ═══════════════════════════════════════════════════════════════════════════════
 
-## Data Result Comparison Guidelines (when comparing query results)
+## Data Result Comparison Guidelines (PRIMARY - when comparing query results)
+
+**This is the preferred comparison method.** Compare the actual data values returned by queries.
 
 ### Consider EQUIVALENT when:
 
