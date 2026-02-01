@@ -548,7 +548,15 @@ class BatchApplier:
     # =========================================================================
 
     def _add_join_spec(self, config: Dict, fix: Dict) -> bool:
-        """Add join specification."""
+        """
+        Add join specification.
+
+        Fix format from LLM:
+            left_table, right_table, left_alias, right_alias, sql, relationship_type, comment
+
+        API format:
+            left: {identifier, alias}, right: {identifier, alias}, sql: [...], comment: [...]
+        """
         left_table = fix.get("left_table")
         right_table = fix.get("right_table")
         sql = fix.get("sql")
@@ -556,14 +564,38 @@ class BatchApplier:
         if not all([left_table, right_table, sql]):
             return False
 
+        # Generate aliases from table names (last part of identifier)
+        left_alias = fix.get("left_alias") or left_table.split(".")[-1][0].lower()
+        right_alias = fix.get("right_alias") or right_table.split(".")[-1][0].lower()
+
+        # Ensure different aliases for self-joins
+        if left_table == right_table:
+            left_alias = f"{left_alias}1"
+            right_alias = f"{left_alias[:-1]}2"
+
         instructions = config.setdefault("instructions", {})
         join_specs = instructions.setdefault("join_specs", [])
 
+        # Build SQL with relationship type marker if not present
+        sql_list = sql if isinstance(sql, list) else [sql]
+        relationship_type = fix.get("relationship_type", "MANY_TO_ONE")
+        rt_marker = f"--rt=FROM_RELATIONSHIP_TYPE_{relationship_type}--"
+
+        # Add marker if not already present
+        if not any("--rt=" in s for s in sql_list):
+            sql_list.append(rt_marker)
+
         new_join = {
             "id": uuid.uuid4().hex,
-            "left_table": left_table,
-            "right_table": right_table,
-            "sql": sql if isinstance(sql, list) else [sql],
+            "left": {
+                "identifier": left_table,
+                "alias": left_alias
+            },
+            "right": {
+                "identifier": right_table,
+                "alias": right_alias
+            },
+            "sql": sql_list,
         }
 
         if fix.get("comment"):
@@ -584,16 +616,19 @@ class BatchApplier:
         instructions = config.get("instructions", {})
         join_specs = instructions.get("join_specs", [])
 
+        def matches_join(j):
+            if join_id and j.get("id") == join_id:
+                return True
+            if left_table and right_table:
+                # Handle new format: left/right are objects with identifier
+                j_left = j.get("left", {}).get("identifier") or j.get("left_table")
+                j_right = j.get("right", {}).get("identifier") or j.get("right_table")
+                if j_left == left_table and j_right == right_table:
+                    return True
+            return False
+
         original_len = len(join_specs)
-        filtered = [
-            j for j in join_specs
-            if not (
-                (join_id and j.get("id") == join_id) or
-                (left_table and right_table and
-                 j.get("left_table") == left_table and
-                 j.get("right_table") == right_table)
-            )
-        ]
+        filtered = [j for j in join_specs if not matches_join(j)]
 
         if len(filtered) < original_len:
             instructions["join_specs"] = filtered
