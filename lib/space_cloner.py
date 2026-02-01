@@ -346,6 +346,8 @@ class SpaceCloner:
         payload = {"serialized_space": serialized_space}
 
         response = requests.patch(url, headers=self.headers, json=payload)
+        if not response.ok:
+            logger.error(f"API Error {response.status_code}: {response.text}")
         response.raise_for_status()
         return response.json()
 
