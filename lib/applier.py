@@ -345,17 +345,64 @@ class BatchApplier:
         return True
 
     def _add_example_query(self, config: Dict, fix: Dict) -> bool:
-        """Add example query."""
+        """
+        Add example query.
+
+        API format requires:
+        - question: list of strings
+        - sql: list of strings (each line ending with space)
+        - parameters: list of {name, type_hint, description}
+        - usage_guidance: list of strings
+        """
         instructions = config.setdefault("instructions", {})
         example_sqls = instructions.setdefault("example_question_sqls", [])
 
+        # Ensure question is a list
+        question = fix.get("question", [])
+        if isinstance(question, str):
+            question = [question]
+
+        # Ensure sql is a list
+        sql = fix.get("sql", [])
+        if isinstance(sql, str):
+            sql = [sql]
+
+        # Ensure usage_guidance is a list
+        usage_guidance = fix.get("usage_guidance", [])
+        if isinstance(usage_guidance, str):
+            usage_guidance = [usage_guidance]
+
+        # Validate and clean parameters
+        # Valid type_hints: STRING, INTEGER, LONG, DOUBLE, DATE, TIMESTAMP, BOOLEAN
+        valid_type_hints = {"STRING", "INTEGER", "LONG", "DOUBLE", "DATE", "TIMESTAMP", "BOOLEAN"}
+        parameters = []
+        for param in fix.get("parameters", []):
+            if isinstance(param, dict) and param.get("name"):
+                clean_param = {
+                    "name": param["name"],
+                    "description": param.get("description", [])
+                }
+                if isinstance(clean_param["description"], str):
+                    clean_param["description"] = [clean_param["description"]]
+
+                # Only include type_hint if valid
+                type_hint = param.get("type_hint", "").upper()
+                if type_hint in valid_type_hints:
+                    clean_param["type_hint"] = type_hint
+
+                parameters.append(clean_param)
+
         example = {
             "id": uuid.uuid4().hex,
-            "question": fix.get("question", []),
-            "sql": fix.get("sql", ""),
-            "parameters": fix.get("parameters", []),
-            "usage_guidance": fix.get("usage_guidance", [])
+            "question": question,
+            "sql": sql,
         }
+
+        # Only add non-empty optional fields
+        if parameters:
+            example["parameters"] = parameters
+        if usage_guidance:
+            example["usage_guidance"] = usage_guidance
 
         example_sqls.append(example)
         return True
