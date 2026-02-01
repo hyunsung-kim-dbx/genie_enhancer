@@ -51,7 +51,7 @@ sys.path.insert(0, project_root)
 from lib.state import JobState
 from lib.llm import DatabricksLLMClient
 from lib.space_api import SpaceUpdater
-from lib.enhancer import EnhancementPlanner
+from lib.category_enhancer import CategoryEnhancer
 from pathlib import Path
 
 # COMMAND ----------
@@ -84,9 +84,9 @@ print(f"✅ Space config loaded ({len(space_config.get('data_sources', {}).get('
 
 # COMMAND ----------
 
-# Generate enhancement plan
+# Generate enhancement plan (using 9-category system)
 prompts_dir = Path(project_root) / "prompts"
-planner = EnhancementPlanner(llm_client, prompts_dir)
+planner = CategoryEnhancer(llm_client, prompts_dir)
 
 start_time = datetime.now()
 
@@ -119,14 +119,22 @@ print(f"\n✅ Plan saved: {total_fixes} total fixes")
 
 # COMMAND ----------
 
-# Display plan summary
-for category in ["metric_view", "metadata", "sample_query", "instruction"]:
+# Display plan summary (9 categories)
+FIX_CATEGORIES = [
+    "instruction_fix",
+    "join_specs_delete", "join_specs_add",
+    "sql_snippets_delete", "sql_snippets_add",
+    "metadata_delete", "metadata_add",
+    "sample_queries_delete", "sample_queries_add",
+]
+for category in FIX_CATEGORIES:
     fixes = grouped_fixes.get(category, [])
-    print(f"\n{category.upper()} ({len(fixes)} fixes)")
-    for fix in fixes[:3]:
-        print(f"  - {fix.get('type')}: {str(fix)[:60]}...")
-    if len(fixes) > 3:
-        print(f"  ... and {len(fixes) - 3} more")
+    if fixes:
+        print(f"\n{category.upper()} ({len(fixes)} fixes)")
+        for fix in fixes[:3]:
+            print(f"  - {fix.get('type')}: {str(fix)[:60]}...")
+        if len(fixes) > 3:
+            print(f"  ... and {len(fixes) - 3} more")
 
 # COMMAND ----------
 

@@ -35,8 +35,8 @@ class SequentialEnhancer:
     - If score unchanged: keep fix (no harm)
     """
 
-    # Legacy fix order (3 categories)
-    LEGACY_FIX_ORDER = ["metric_view", "metadata", "sample_query", "instruction"]
+    # Legacy fix order (DEPRECATED: metric_view removed)
+    LEGACY_FIX_ORDER = ["metadata", "sample_query", "instruction"]
 
     # Category-based fix order (9 categories)
     CATEGORY_FIX_ORDER = [
@@ -377,11 +377,11 @@ class SequentialEnhancer:
         elif fix_type == "update_text_instruction":
             config = self._update_text_instruction(config, fix)
 
-        # Metric view fixes (require SQL executor)
-        elif fix_type == "create_metric_view":
-            config = self._create_metric_view(config, fix)
-        elif fix_type == "delete_metric_view":
-            config = self._delete_metric_view(config, fix)
+        # Metric view fixes (DEPRECATED - removed from CategoryEnhancer)
+        # elif fix_type == "create_metric_view":
+        #     config = self._create_metric_view(config, fix)
+        # elif fix_type == "delete_metric_view":
+        #     config = self._delete_metric_view(config, fix)
 
         # SQL snippet fixes
         elif fix_type == "add_filter":
@@ -580,89 +580,90 @@ class SequentialEnhancer:
 
         return config
 
-    def _create_metric_view(self, config: Dict, fix: Dict) -> Dict:
-        """Create metric view in Unity Catalog and add to space."""
-        if not self.sql_executor:
-            logger.warning("SQL executor not available for metric view creation")
-            return config
-
-        catalog = fix.get("catalog")
-        schema = fix.get("schema")
-        view_name = fix.get("metric_view_name")
-        sql = fix.get("sql")
-
-        if not all([catalog, schema, view_name, sql]):
-            return config
-
-        full_name = f"{catalog}.{schema}.{view_name}"
-
-        # Create the view in Unity Catalog
-        try:
-            create_sql = f"CREATE OR REPLACE VIEW {full_name} AS {sql}"
-            self.sql_executor.execute(create_sql)
-            logger.info(f"Created metric view: {full_name}")
-        except Exception as e:
-            logger.error(f"Failed to create metric view {full_name}: {e}")
-            raise
-
-        # Add view to space configuration
-        data_sources = config.setdefault("data_sources", {})
-        tables = data_sources.setdefault("tables", [])
-
-        # Check if already exists
-        exists = any(
-            t.get("catalog") == catalog and
-            t.get("schema") == schema and
-            t.get("table_name") == view_name
-            for t in tables
-        )
-
-        if not exists:
-            tables.append({
-                "catalog": catalog,
-                "schema": schema,
-                "table_name": view_name,
-                "description": fix.get("description", f"Metric view: {view_name}")
-            })
-
-        return config
-
-    def _delete_metric_view(self, config: Dict, fix: Dict) -> Dict:
-        """Remove metric view from space (optionally drop from UC)."""
-        catalog = fix.get("catalog")
-        schema = fix.get("schema")
-        view_name = fix.get("metric_view_name")
-        drop_from_uc = fix.get("drop_from_uc", False)
-
-        if not view_name:
-            return config
-
-        # Remove from space config
-        data_sources = config.get("data_sources", {})
-        tables = data_sources.get("tables", [])
-
-        filtered = [
-            t for t in tables
-            if not (
-                t.get("table_name") == view_name and
-                (not catalog or t.get("catalog") == catalog) and
-                (not schema or t.get("schema") == schema)
-            )
-        ]
-
-        data_sources["tables"] = filtered
-
-        # Optionally drop from Unity Catalog
-        if drop_from_uc and self.sql_executor and catalog and schema:
-            try:
-                full_name = f"{catalog}.{schema}.{view_name}"
-                drop_sql = f"DROP VIEW IF EXISTS {full_name}"
-                self.sql_executor.execute(drop_sql)
-                logger.info(f"Dropped metric view: {full_name}")
-            except Exception as e:
-                logger.warning(f"Failed to drop metric view: {e}")
-
-        return config
+    # DEPRECATED: Metric view methods removed from CategoryEnhancer
+    # def _create_metric_view(self, config: Dict, fix: Dict) -> Dict:
+    #     """Create metric view in Unity Catalog and add to space."""
+    #     if not self.sql_executor:
+    #         logger.warning("SQL executor not available for metric view creation")
+    #         return config
+    #
+    #     catalog = fix.get("catalog")
+    #     schema = fix.get("schema")
+    #     view_name = fix.get("metric_view_name")
+    #     sql = fix.get("sql")
+    #
+    #     if not all([catalog, schema, view_name, sql]):
+    #         return config
+    #
+    #     full_name = f"{catalog}.{schema}.{view_name}"
+    #
+    #     # Create the view in Unity Catalog
+    #     try:
+    #         create_sql = f"CREATE OR REPLACE VIEW {full_name} AS {sql}"
+    #         self.sql_executor.execute(create_sql)
+    #         logger.info(f"Created metric view: {full_name}")
+    #     except Exception as e:
+    #         logger.error(f"Failed to create metric view {full_name}: {e}")
+    #         raise
+    #
+    #     # Add view to space configuration
+    #     data_sources = config.setdefault("data_sources", {})
+    #     tables = data_sources.setdefault("tables", [])
+    #
+    #     # Check if already exists
+    #     exists = any(
+    #         t.get("catalog") == catalog and
+    #         t.get("schema") == schema and
+    #         t.get("table_name") == view_name
+    #         for t in tables
+    #     )
+    #
+    #     if not exists:
+    #         tables.append({
+    #             "catalog": catalog,
+    #             "schema": schema,
+    #             "table_name": view_name,
+    #             "description": fix.get("description", f"Metric view: {view_name}")
+    #         })
+    #
+    #     return config
+    #
+    # def _delete_metric_view(self, config: Dict, fix: Dict) -> Dict:
+    #     """Remove metric view from space (optionally drop from UC)."""
+    #     catalog = fix.get("catalog")
+    #     schema = fix.get("schema")
+    #     view_name = fix.get("metric_view_name")
+    #     drop_from_uc = fix.get("drop_from_uc", False)
+    #
+    #     if not view_name:
+    #         return config
+    #
+    #     # Remove from space config
+    #     data_sources = config.get("data_sources", {})
+    #     tables = data_sources.get("tables", [])
+    #
+    #     filtered = [
+    #         t for t in tables
+    #         if not (
+    #             t.get("table_name") == view_name and
+    #             (not catalog or t.get("catalog") == catalog) and
+    #             (not schema or t.get("schema") == schema)
+    #         )
+    #     ]
+    #
+    #     data_sources["tables"] = filtered
+    #
+    #     # Optionally drop from Unity Catalog
+    #     if drop_from_uc and self.sql_executor and catalog and schema:
+    #         try:
+    #             full_name = f"{catalog}.{schema}.{view_name}"
+    #             drop_sql = f"DROP VIEW IF EXISTS {full_name}"
+    #             self.sql_executor.execute(drop_sql)
+    #             logger.info(f"Dropped metric view: {full_name}")
+    #         except Exception as e:
+    #             logger.warning(f"Failed to drop metric view: {e}")
+    #
+    #     return config
 
     # =========================================================================
     # SQL Snippet Methods (filters, expressions, measures)

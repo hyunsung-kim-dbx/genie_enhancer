@@ -96,30 +96,63 @@ def format_fix_description(fix: dict) -> str:
     """Format a fix for display."""
     fix_type = fix.get('type', 'unknown')
 
+    # Metadata fixes
     if fix_type == 'add_synonym':
-        return f"Add synonym '{fix['synonym']}' to {fix['table']}.{fix['column']}"
+        return f"Add synonym '{fix.get('synonym')}' to {fix.get('table')}.{fix.get('column')}"
     elif fix_type == 'delete_synonym':
-        return f"Remove synonym '{fix['synonym']}' from {fix['table']}.{fix['column']}"
+        return f"Remove synonym '{fix.get('synonym')}' from {fix.get('table')}.{fix.get('column')}"
     elif fix_type == 'add_column_description':
-        return f"Add description to {fix['table']}.{fix['column']}"
+        return f"Add description to {fix.get('table')}.{fix.get('column')}"
     elif fix_type == 'add_table_description':
-        return f"Add description to {fix['table']}"
+        return f"Add description to {fix.get('table')}"
+
+    # Sample query fixes
     elif fix_type == 'add_example_query':
         return f"Add query pattern: {fix.get('pattern_name', 'N/A')}"
     elif fix_type == 'delete_example_query':
-        return f"Remove query pattern: {fix.get('pattern_name', 'N/A')}"
-    elif fix_type == 'create_metric_view':
-        return f"Create metric view: {fix['catalog']}.{fix['schema']}.{fix['metric_view_name']}"
-    elif fix_type == 'delete_metric_view':
-        return f"Remove metric view: {fix.get('metric_view_name')}"
+        return f"Remove query pattern: {fix.get('pattern_name', fix.get('id', 'N/A'))}"
+
+    # Instruction fixes
     elif fix_type == 'update_text_instruction':
         return "Update text instructions"
+
+    # SQL Snippet fixes (new)
+    elif fix_type == 'add_filter':
+        return f"Add filter: {fix.get('display_name', 'N/A')}"
+    elif fix_type == 'delete_filter':
+        return f"Remove filter: {fix.get('display_name', fix.get('id', 'N/A'))}"
+    elif fix_type == 'add_expression':
+        return f"Add expression: {fix.get('alias', fix.get('display_name', 'N/A'))}"
+    elif fix_type == 'delete_expression':
+        return f"Remove expression: {fix.get('alias', fix.get('id', 'N/A'))}"
+    elif fix_type == 'add_measure':
+        return f"Add measure: {fix.get('alias', fix.get('display_name', 'N/A'))}"
+    elif fix_type == 'delete_measure':
+        return f"Remove measure: {fix.get('alias', fix.get('id', 'N/A'))}"
+
+    # Join spec fixes (new)
+    elif fix_type == 'add_join_spec':
+        return f"Add join: {fix.get('left_table')} ↔ {fix.get('right_table')}"
+    elif fix_type == 'delete_join_spec':
+        return f"Remove join: {fix.get('left_table')} ↔ {fix.get('right_table')}"
+
     else:
         return f"{fix_type}"
 
 def get_fix_category_icon(category: str) -> str:
     """Get icon for fix category."""
     icons = {
+        # New 9 categories
+        'instruction_fix': '📖',
+        'sample_queries_delete': '🗑️',
+        'sample_queries_add': '📚',
+        'metadata_delete': '🔻',
+        'metadata_add': '📝',
+        'sql_snippets_delete': '⛔',
+        'sql_snippets_add': '🧩',
+        'join_specs_delete': '🔗',
+        'join_specs_add': '🔗',
+        # Legacy categories (for backwards compatibility)
         'metric_view': '📊',
         'metadata': '📝',
         'sample_query': '📚',
@@ -130,6 +163,17 @@ def get_fix_category_icon(category: str) -> str:
 def get_fix_category_korean(category: str) -> str:
     """Get Korean name for fix category."""
     names = {
+        # New 9 categories
+        'instruction_fix': '지침 수정',
+        'sample_queries_delete': '샘플 쿼리 삭제',
+        'sample_queries_add': '샘플 쿼리 추가',
+        'metadata_delete': '메타데이터 삭제',
+        'metadata_add': '메타데이터 추가',
+        'sql_snippets_delete': 'SQL 스니펫 삭제',
+        'sql_snippets_add': 'SQL 스니펫 추가',
+        'join_specs_delete': '조인 스펙 삭제',
+        'join_specs_add': '조인 스펙 추가',
+        # Legacy categories
         'metric_view': '메트릭 뷰',
         'metadata': '메타데이터',
         'sample_query': '샘플 쿼리',
@@ -364,7 +408,8 @@ elif st.session_state.step == 'setup':
 
         scorer = BenchmarkScorer(
             genie_client=genie_client,
-            llm_client=llm_client
+            llm_client=llm_client,
+            sql_executor=sql_executor
         )
 
         # Create SQL executor for metric views
@@ -378,7 +423,8 @@ elif st.session_state.step == 'setup':
             llm_client=llm_client,
             space_cloner=space_cloner,
             scorer=scorer,
-            sql_executor=sql_executor
+            sql_executor=sql_executor,
+            use_category_mode=True  # Use new 9-category batch analysis
         )
 
         st.session_state.clients = {
@@ -457,10 +503,23 @@ elif st.session_state.step == 'analyze':
     progress.progress(1.0)
 
     # Display fix summary
-    st.subheader("Generated Fixes (4 Types Only)")
+    st.subheader("Generated Fixes (9 Categories)")
+
+    # New 9 categories from CategoryEnhancer
+    FIX_CATEGORIES = [
+        'instruction_fix',
+        'join_specs_delete',
+        'join_specs_add',
+        'sql_snippets_delete',
+        'sql_snippets_add',
+        'metadata_delete',
+        'metadata_add',
+        'sample_queries_delete',
+        'sample_queries_add',
+    ]
 
     total_fixes = 0
-    for category in ['metric_view', 'metadata', 'sample_query', 'instruction']:
+    for category in FIX_CATEGORIES:
         fixes = grouped_fixes.get(category, [])
         total_fixes += len(fixes)
 

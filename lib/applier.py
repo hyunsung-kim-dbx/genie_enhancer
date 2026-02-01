@@ -25,7 +25,8 @@ class BatchApplier:
     4. Instructions
     """
 
-    FIX_ORDER = ["metric_view", "metadata", "sample_query", "instruction"]
+    # DEPRECATED: metric_view removed from CategoryEnhancer
+    FIX_ORDER = ["metadata", "sample_query", "instruction"]
 
     def __init__(self, space_api, sql_executor=None, config: Dict = None):
         """
@@ -152,6 +153,7 @@ class BatchApplier:
         """Apply a single fix to the configuration (in memory)."""
         fix_type = fix.get("type", "")
 
+        # Metadata fixes
         if fix_type == "add_synonym":
             return self._add_synonym(config, fix)
         elif fix_type == "delete_synonym":
@@ -160,16 +162,43 @@ class BatchApplier:
             return self._add_column_description(config, fix)
         elif fix_type == "add_table_description":
             return self._add_table_description(config, fix)
+
+        # Sample query fixes
         elif fix_type == "add_example_query":
             return self._add_example_query(config, fix)
         elif fix_type == "delete_example_query":
             return self._delete_example_query(config, fix)
-        elif fix_type == "create_metric_view":
-            return self._create_metric_view(config, fix)
-        elif fix_type == "delete_metric_view":
-            return self._delete_metric_view(config, fix)
+
+        # Metric view fixes (DEPRECATED - removed from CategoryEnhancer)
+        # elif fix_type == "create_metric_view":
+        #     return self._create_metric_view(config, fix)
+        # elif fix_type == "delete_metric_view":
+        #     return self._delete_metric_view(config, fix)
+
+        # Instruction fixes
         elif fix_type == "update_text_instruction":
             return self._update_text_instruction(config, fix)
+
+        # SQL snippet fixes (NEW)
+        elif fix_type == "add_filter":
+            return self._add_sql_snippet(config, fix, "filters")
+        elif fix_type == "delete_filter":
+            return self._delete_sql_snippet(config, fix, "filters")
+        elif fix_type == "add_expression":
+            return self._add_sql_snippet(config, fix, "expressions")
+        elif fix_type == "delete_expression":
+            return self._delete_sql_snippet(config, fix, "expressions")
+        elif fix_type == "add_measure":
+            return self._add_sql_snippet(config, fix, "measures")
+        elif fix_type == "delete_measure":
+            return self._delete_sql_snippet(config, fix, "measures")
+
+        # Join spec fixes (NEW)
+        elif fix_type == "add_join_spec":
+            return self._add_join_spec(config, fix)
+        elif fix_type == "delete_join_spec":
+            return self._delete_join_spec(config, fix)
+
         else:
             logger.warning(f"Unknown fix type: {fix_type}")
             return False
@@ -338,84 +367,85 @@ class BatchApplier:
                 return True
         return False
 
-    def _create_metric_view(self, config: Dict, fix: Dict) -> bool:
-        """Create metric view in Unity Catalog and add to config."""
-        import yaml
-
-        base_name = fix.get("metric_view_name", "")
-        catalog = fix.get("catalog") or self.default_catalog
-        schema = fix.get("schema") or self.default_schema
-
-        if not base_name.startswith(self.metric_view_prefix):
-            metric_view_name = f"{self.metric_view_prefix}{base_name}"
-        else:
-            metric_view_name = base_name
-
-        fqn = f"{catalog}.{schema}.{metric_view_name}"
-
-        # Create in Unity Catalog if executor available
-        if self.sql_executor:
-            yaml_definition = fix.get("yaml_definition", {})
-            source_table = fix.get("source_table")
-
-            yaml_dict = {"version": 1.1}
-            if fix.get("table_description"):
-                desc = fix["table_description"]
-                yaml_dict["comment"] = desc if isinstance(desc, str) else desc[0]
-            if source_table:
-                yaml_dict["source"] = source_table
-            if yaml_definition.get("dimensions"):
-                yaml_dict["dimensions"] = yaml_definition["dimensions"]
-            if yaml_definition.get("measures"):
-                yaml_dict["measures"] = yaml_definition["measures"]
-
-            yaml_str = yaml.dump(yaml_dict, default_flow_style=False, sort_keys=False, indent=2)
-
-            create_sql = f"""CREATE OR REPLACE VIEW {fqn}
-WITH METRICS
-LANGUAGE YAML
-AS $$
-{yaml_str}$$"""
-
-            try:
-                result = self.sql_executor.execute(create_sql, timeout=120)
-                if result.get("status") != "SUCCEEDED":
-                    logger.warning(f"Metric view SQL failed: {result.get('error')}")
-            except Exception as e:
-                logger.warning(f"Could not create metric view in UC: {e}")
-
-        # Add to Genie Space config
-        tables = config.setdefault("data_sources", {}).setdefault("tables", [])
-
-        # Remove if exists
-        tables[:] = [t for t in tables if t.get("identifier") != fqn]
-
-        metric_view_table = {
-            "identifier": fqn,
-            "column_configs": []
-        }
-
-        if fix.get("table_description"):
-            desc = fix["table_description"]
-            metric_view_table["description"] = [desc] if isinstance(desc, str) else desc
-
-        tables.append(metric_view_table)
-        return True
-
-    def _delete_metric_view(self, config: Dict, fix: Dict) -> bool:
-        """Remove metric view from configuration."""
-        metric_view_name = fix.get("metric_view_name")
-        if not metric_view_name:
-            return False
-
-        tables = config.get("data_sources", {}).get("tables", [])
-        for i, table in enumerate(tables):
-            identifier = table.get("identifier", "")
-            # Match by exact identifier or table name
-            if identifier == metric_view_name or identifier.endswith(f".{metric_view_name}"):
-                tables.pop(i)
-                return True
-        return False
+    # DEPRECATED: Metric view methods removed from CategoryEnhancer
+    # def _create_metric_view(self, config: Dict, fix: Dict) -> bool:
+    #     """Create metric view in Unity Catalog and add to config."""
+    #     import yaml
+    #
+    #     base_name = fix.get("metric_view_name", "")
+    #     catalog = fix.get("catalog") or self.default_catalog
+    #     schema = fix.get("schema") or self.default_schema
+    #
+    #     if not base_name.startswith(self.metric_view_prefix):
+    #         metric_view_name = f"{self.metric_view_prefix}{base_name}"
+    #     else:
+    #         metric_view_name = base_name
+    #
+    #     fqn = f"{catalog}.{schema}.{metric_view_name}"
+    #
+    #     # Create in Unity Catalog if executor available
+    #     if self.sql_executor:
+    #         yaml_definition = fix.get("yaml_definition", {})
+    #         source_table = fix.get("source_table")
+    #
+    #         yaml_dict = {"version": 1.1}
+    #         if fix.get("table_description"):
+    #             desc = fix["table_description"]
+    #             yaml_dict["comment"] = desc if isinstance(desc, str) else desc[0]
+    #         if source_table:
+    #             yaml_dict["source"] = source_table
+    #         if yaml_definition.get("dimensions"):
+    #             yaml_dict["dimensions"] = yaml_definition["dimensions"]
+    #         if yaml_definition.get("measures"):
+    #             yaml_dict["measures"] = yaml_definition["measures"]
+    #
+    #         yaml_str = yaml.dump(yaml_dict, default_flow_style=False, sort_keys=False, indent=2)
+    #
+    #         create_sql = f"""CREATE OR REPLACE VIEW {fqn}
+    # WITH METRICS
+    # LANGUAGE YAML
+    # AS $$
+    # {yaml_str}$$"""
+    #
+    #         try:
+    #             result = self.sql_executor.execute(create_sql, timeout=120)
+    #             if result.get("status") != "SUCCEEDED":
+    #                 logger.warning(f"Metric view SQL failed: {result.get('error')}")
+    #         except Exception as e:
+    #             logger.warning(f"Could not create metric view in UC: {e}")
+    #
+    #     # Add to Genie Space config
+    #     tables = config.setdefault("data_sources", {}).setdefault("tables", [])
+    #
+    #     # Remove if exists
+    #     tables[:] = [t for t in tables if t.get("identifier") != fqn]
+    #
+    #     metric_view_table = {
+    #         "identifier": fqn,
+    #         "column_configs": []
+    #     }
+    #
+    #     if fix.get("table_description"):
+    #         desc = fix["table_description"]
+    #         metric_view_table["description"] = [desc] if isinstance(desc, str) else desc
+    #
+    #     tables.append(metric_view_table)
+    #     return True
+    #
+    # def _delete_metric_view(self, config: Dict, fix: Dict) -> bool:
+    #     """Remove metric view from configuration."""
+    #     metric_view_name = fix.get("metric_view_name")
+    #     if not metric_view_name:
+    #         return False
+    #
+    #     tables = config.get("data_sources", {}).get("tables", [])
+    #     for i, table in enumerate(tables):
+    #         identifier = table.get("identifier", "")
+    #         # Match by exact identifier or table name
+    #         if identifier == metric_view_name or identifier.endswith(f".{metric_view_name}"):
+    #             tables.pop(i)
+    #             return True
+    #     return False
 
     def _update_text_instruction(self, config: Dict, fix: Dict) -> bool:
         """Update text instruction."""
@@ -434,3 +464,128 @@ AS $$
                 "content": content
             })
         return True
+
+    # =========================================================================
+    # SQL Snippet Methods (NEW)
+    # =========================================================================
+
+    def _add_sql_snippet(self, config: Dict, fix: Dict, snippet_type: str) -> bool:
+        """
+        Add SQL snippet (filter, expression, or measure).
+
+        Args:
+            config: Space configuration
+            fix: Fix dict with sql, display_name, synonyms, alias (for expr/measure)
+            snippet_type: "filters", "expressions", or "measures"
+        """
+        sql = fix.get("sql")
+        display_name = fix.get("display_name")
+
+        if not sql:
+            return False
+
+        instructions = config.setdefault("instructions", {})
+        snippets = instructions.setdefault("sql_snippets", {})
+        snippet_list = snippets.setdefault(snippet_type, [])
+
+        new_snippet = {
+            "id": uuid.uuid4().hex,
+            "sql": sql if isinstance(sql, list) else [sql],
+            "display_name": display_name or f"Snippet",
+        }
+
+        if fix.get("synonyms"):
+            new_snippet["synonyms"] = fix["synonyms"]
+
+        if snippet_type in ("expressions", "measures"):
+            alias = fix.get("alias")
+            if alias:
+                new_snippet["alias"] = alias
+
+        snippet_list.append(new_snippet)
+        return True
+
+    def _delete_sql_snippet(self, config: Dict, fix: Dict, snippet_type: str) -> bool:
+        """Delete SQL snippet by id, alias, or display_name."""
+        snippet_id = fix.get("id")
+        alias = fix.get("alias")
+        display_name = fix.get("display_name")
+
+        if not any([snippet_id, alias, display_name]):
+            return False
+
+        instructions = config.get("instructions", {})
+        snippets = instructions.get("sql_snippets", {})
+        snippet_list = snippets.get(snippet_type, [])
+
+        original_len = len(snippet_list)
+        filtered = [
+            s for s in snippet_list
+            if not (
+                (snippet_id and s.get("id") == snippet_id) or
+                (alias and s.get("alias") == alias) or
+                (display_name and s.get("display_name") == display_name)
+            )
+        ]
+
+        if len(filtered) < original_len:
+            snippets[snippet_type] = filtered
+            return True
+        return False
+
+    # =========================================================================
+    # Join Spec Methods (NEW)
+    # =========================================================================
+
+    def _add_join_spec(self, config: Dict, fix: Dict) -> bool:
+        """Add join specification."""
+        left_table = fix.get("left_table")
+        right_table = fix.get("right_table")
+        sql = fix.get("sql")
+
+        if not all([left_table, right_table, sql]):
+            return False
+
+        instructions = config.setdefault("instructions", {})
+        join_specs = instructions.setdefault("join_specs", [])
+
+        new_join = {
+            "id": uuid.uuid4().hex,
+            "left_table": left_table,
+            "right_table": right_table,
+            "sql": sql if isinstance(sql, list) else [sql],
+        }
+
+        if fix.get("comment"):
+            new_join["comment"] = fix["comment"] if isinstance(fix["comment"], list) else [fix["comment"]]
+
+        join_specs.append(new_join)
+        return True
+
+    def _delete_join_spec(self, config: Dict, fix: Dict) -> bool:
+        """Delete join specification by id or table pair."""
+        join_id = fix.get("id")
+        left_table = fix.get("left_table")
+        right_table = fix.get("right_table")
+
+        if not join_id and not (left_table and right_table):
+            return False
+
+        instructions = config.get("instructions", {})
+        join_specs = instructions.get("join_specs", [])
+
+        original_len = len(join_specs)
+        filtered = [
+            j for j in join_specs
+            if not (
+                (join_id and j.get("id") == join_id) or
+                (left_table and right_table and
+                 j.get("left_table") == left_table and
+                 j.get("right_table") == right_table)
+            )
+        ]
+
+        if len(filtered) < original_len:
+            instructions["join_specs"] = filtered
+            return True
+        return False

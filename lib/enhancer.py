@@ -232,6 +232,7 @@ class EnhancementPlanner:
         for fix in fixes:
             fix_type = fix.get("type", "")
 
+            # Metadata fixes
             if fix_type == "add_synonym":
                 key = (fix_type, fix.get("table"), fix.get("column"), fix.get("synonym"))
             elif fix_type == "delete_synonym":
@@ -240,12 +241,37 @@ class EnhancementPlanner:
                 key = (fix_type, fix.get("table"), fix.get("column"))
             elif fix_type == "add_table_description":
                 key = (fix_type, fix.get("table"))
+
+            # Sample query fixes
             elif fix_type == "add_example_query":
                 key = (fix_type, fix.get("pattern_name"))
             elif fix_type == "delete_example_query":
-                key = (fix_type, fix.get("pattern_name"))
+                key = (fix_type, fix.get("pattern_name"), fix.get("id"))
+
+            # Instruction fixes
             elif fix_type == "update_text_instruction":
                 key = (fix_type,)
+
+            # SQL snippet fixes
+            elif fix_type == "add_filter":
+                key = (fix_type, fix.get("display_name"), fix.get("sql_expression"))
+            elif fix_type == "delete_filter":
+                key = (fix_type, fix.get("display_name"), fix.get("id"))
+            elif fix_type == "add_expression":
+                key = (fix_type, fix.get("alias"), fix.get("sql_expression"))
+            elif fix_type == "delete_expression":
+                key = (fix_type, fix.get("alias"), fix.get("id"))
+            elif fix_type == "add_measure":
+                key = (fix_type, fix.get("alias"), fix.get("sql_expression"))
+            elif fix_type == "delete_measure":
+                key = (fix_type, fix.get("alias"), fix.get("id"))
+
+            # Join spec fixes
+            elif fix_type == "add_join_spec":
+                key = (fix_type, fix.get("left_table"), fix.get("right_table"), fix.get("on_clause"))
+            elif fix_type == "delete_join_spec":
+                key = (fix_type, fix.get("left_table"), fix.get("right_table"))
+
             else:
                 key = json.dumps(fix, sort_keys=True)
 
