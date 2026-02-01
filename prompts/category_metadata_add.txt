@@ -1,0 +1,246 @@
+# Category: Metadata Add - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **synonyms and descriptions to ADD** that enable Korean term matching.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## METADATA BEST PRACTICES (MOST CRITICAL!)
+═══════════════════════════════════════════════════════════════════════════════
+
+### Synonyms (CRITICAL for Natural Language!)
+
+Synonyms map user terms to column names. **Without synonyms, Genie can't match
+Korean questions to SQL columns.**
+
+**When to add synonyms:**
+- Question uses Korean term X but column is named Y (English)
+- Business jargon differs from technical names
+- Common variations users might say
+
+**Good synonym examples:**
+| Column Name | Korean Synonyms |
+|-------------|-----------------|
+| `reaction.count` | 리액션, 리액션 수, 반응 |
+| `votes_up` | 추천, 추천 수, 업보트, 좋아요 |
+| `message_id` | 메시지, 글 |
+| `channel_name` | 채널, 채널명 |
+| `comment_id` | 댓글, 코멘트 |
+
+**Synonym fix format:**
+```json
+{{
+  "type": "add_synonym",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "synonym": "한글_용어",
+  "reasoning": "Question uses '한글_용어' but column is 'column_name'"
+}}
+```
+
+### Column Descriptions
+
+Every important column MUST have:
+- What the field represents
+- When to use this field
+- Business rules that apply
+
+**Good description template:**
+"[What it represents]. Use for [purpose]. [Units/format if applicable]."
+
+```
+GOOD: "Total order value in USD. Use for revenue calculations.
+       Does NOT include tax or shipping."
+
+BAD:  "Order amount"
+```
+
+**Column description fix format:**
+```json
+{{
+  "type": "add_column_description",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "description": ["Korean description of what this column contains and when to use it"],
+  "reasoning": "Genie picked wrong column because purpose was unclear"
+}}
+```
+
+### Table Descriptions
+
+Every table MUST have a description that includes:
+- What the table represents
+- Scope of data (what's included AND excluded)
+- Conditions for when Genie should use this table
+
+```
+GOOD: "Contains all completed customer orders since 2020. Each row is one
+       order transaction. Does NOT include pending orders (use orders_pending).
+       Use for revenue analysis and purchase history."
+
+BAD:  "Orders table"
+```
+
+**Table description fix format:**
+```json
+{{
+  "type": "add_table_description",
+  "table": "catalog.schema.table_name",
+  "description": ["Korean description of table scope and usage"],
+  "reasoning": "Genie picked wrong table because scope was unclear"
+}}
+```
+
+### Common Issues Fixed by Metadata:
+| Issue | Fix With |
+|-------|----------|
+| Query uses wrong fields | Column descriptions + Synonyms |
+| "No data available" (but exists) | Table descriptions + Synonyms |
+| Answers about out-of-scope data | Table descriptions (scope clarity) |
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures to identify metadata that should be ADDED:
+
+### 1. Synonym Mining (CRITICAL for Korean)
+
+Scan all korean_questions and expected_sql to find:
+- Korean terms in questions that map to specific columns
+- Count frequency: high-frequency terms are most important
+
+**Example synonym mining:**
+| Korean Term | Column in Expected SQL | Frequency |
+|-------------|------------------------|-----------|
+| 리액션 | reaction.count | 5 failures |
+| 추천 | votes_up | 3 failures |
+| 채널 | channel_name | 4 failures |
+
+### 2. Column Descriptions
+
+For columns where Genie picks the WRONG column:
+- Add description explaining when to use this column
+- Clarify difference from similar columns
+
+### 3. Table Descriptions
+
+For tables where Genie picks the WRONG table:
+- Add description explaining table scope
+- Clarify what data is/isn't included
+
+**Prioritization:**
+- Add synonyms that help the MOST failures first
+- Focus on high-frequency Korean terms
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "korean_terms_mined": [
+      {{
+        "term": "리액션",
+        "maps_to_table": "sandbox.agent_poc.reaction",
+        "maps_to_column": "count",
+        "failure_count": 5,
+        "example_questions": ["리액션 수가 가장 많은...", "리액션 현황..."]
+      }}
+    ],
+    "column_clarifications_needed": [
+      {{
+        "table": "table_name",
+        "column": "column_name",
+        "issue": "Genie confuses this with other column",
+        "failure_count": N
+      }}
+    ],
+    "table_clarifications_needed": [
+      {{
+        "table": "table_name",
+        "issue": "Genie uses wrong table",
+        "failure_count": N
+      }}
+    ],
+    "total_fixes": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "add_synonym",
+      "table": "catalog.schema.table",
+      "column": "column_name",
+      "synonym": "한글_동의어",
+      "reasoning": "Term appears in N failures, maps to this column"
+    }},
+    {{
+      "type": "add_column_description",
+      "table": "catalog.schema.table",
+      "column": "column_name",
+      "description": ["Korean description of column purpose and usage"],
+      "reasoning": "Clarifies column purpose to prevent wrong selection"
+    }},
+    {{
+      "type": "add_table_description",
+      "table": "catalog.schema.table",
+      "description": ["Korean description of table scope"],
+      "reasoning": "Clarifies table scope to prevent wrong table selection"
+    }}
+  ]
+}}
+```
+
+If no additions needed:
+```json
+{{
+  "analysis": {{
+    "korean_terms_mined": [],
+    "column_clarifications_needed": [],
+    "table_clarifications_needed": [],
+    "total_fixes": 0,
+    "reasoning": "All Korean terms already mapped, descriptions complete"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Mine Korean terms systematically from ALL failures
+- Prioritize high-frequency terms
+- Use Korean for synonyms and descriptions
+- Add synonyms that help MULTIPLE failures, not just one
+
+Return ONLY valid JSON. No additional text.

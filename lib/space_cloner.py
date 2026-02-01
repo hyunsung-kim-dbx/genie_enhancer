@@ -265,6 +265,26 @@ class SpaceCloner:
         data = self._export_space(self.dev_working_id)
         return data.get("serialized_space_parsed", {})
 
+    # =========================================================================
+    # Public API Methods (for BatchApplier compatibility)
+    # =========================================================================
+
+    def export_space(self, space_id: str) -> Dict:
+        """
+        Public wrapper for exporting a Genie Space configuration.
+
+        Used by BatchApplier.
+        """
+        return self._export_space(space_id)
+
+    def update_space(self, space_id: str, serialized_space: str) -> Dict:
+        """
+        Public wrapper for updating a Genie Space.
+
+        Used by BatchApplier.
+        """
+        return self._update_space(space_id, serialized_space)
+
     def update_dev_working_config(self, config: Dict) -> Dict:
         """Update dev-working space with new configuration."""
         if not self.dev_working_id:

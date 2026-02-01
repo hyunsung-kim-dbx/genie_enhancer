@@ -112,24 +112,26 @@ You are an expert at evaluating whether a Genie Space (Databricks natural langua
 
 ### Consider DIFFERENT when:
 
-1. **Missing Data:**
-   - Expected has rows that Genie doesn't
-   - Genie has rows that expected doesn't
-
-2. **Wrong Values:**
+1. **Wrong Values:**
    - Numbers are significantly different (not just rounding)
    - Dates are different days/months/years
+   - Aggregates are fundamentally wrong
 
-3. **Wrong Aggregation:**
+2. **Wrong Aggregation:**
    - SUM vs COUNT vs AVG (different operations)
    - Different grouping levels
 
-4. **Incorrect Filtering:**
-   - Genie included/excluded wrong records
+3. **Incorrect Filtering:**
+   - Genie included/excluded wrong records **AND it changes the answer meaning**
 
-5. **Order Matters:**
-   - If question asks for "top 10", order is critical
+4. **Order Matters (only if question specifies):**
+   - If question asks for "top 10", the TOP items should match
    - If question asks for "first/last", order matters
+
+5. **IMPORTANT - Row Count Alone is NOT Failure:**
+   - Row count mismatch is ONLY a failure if the missing/extra rows **fundamentally change the answer**
+   - If core data values match, PASS even if row counts differ slightly
+   - For aggregation questions (totals, averages), row count is often irrelevant
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -257,6 +259,11 @@ Return your comparison as JSON with this EXACT structure:
 - Different but valid approaches to the same question
 - Results have same top items even if counts/values differ slightly
 - SQL targets same tables and has similar logic even if not exact match
+- **ROW COUNT DIFFERS BUT DATA IS SEMANTICALLY EQUIVALENT:**
+  - Same aggregation result (e.g., both return total=1500000)
+  - Same top N items even if total rows differ
+  - Minor row differences due to NULL handling or date boundaries
+  - Rows differ but answer still correctly responds to the question
 
 **Only mark as FAIL when:**
 - Genie completely misunderstands the question
@@ -264,6 +271,24 @@ Return your comparison as JSON with this EXACT structure:
 - Missing critical filter that changes the result significantly
 - Wrong table entirely
 - Answer is nonsensical or clearly wrong
+- **Row count differs AND the missing/extra rows fundamentally change the answer**
+
+## Row Count Philosophy
+
+**Row count alone is NOT a failure criterion.**
+
+Ask yourself: "Does Genie's answer correctly respond to the user's question?"
+
+| Scenario | Verdict |
+|----------|---------|
+| Expected 100 rows, Genie 98 rows, but same aggregates/totals | **PASS** |
+| Expected 10 rows, Genie 10 rows, same data different order | **PASS** |
+| Expected "total revenue = 1.5M", Genie "total revenue = 1.5M" | **PASS** (row count irrelevant) |
+| Expected top 10, Genie shows top 10 with same items | **PASS** |
+| Expected 100 rows, Genie 50 rows, missing half the data | **FAIL** (fundamental difference) |
+| Expected specific customer, Genie returns different customer | **FAIL** (wrong answer) |
+
+**Focus on SEMANTIC CORRECTNESS, not exact row matching.**
 
 ═══════════════════════════════════════════════════════════════════════════════
 

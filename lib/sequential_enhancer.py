@@ -6,14 +6,20 @@ Orchestrates the sequential fix application loop:
 2. Apply fixes one at a time
 3. Evaluate each fix
 4. Keep or rollback based on score improvement
+
+Supports two analysis modes:
+- Legacy: Per-question analysis (N failures × 3 categories = 3N LLM calls)
+- Category-based: Batch analysis (9 LLM calls total, regardless of failure count)
 """
 
 import json
 import time
 import logging
+import uuid
 from typing import Dict, List, Callable, Optional
 
 from lib.enhancer import EnhancementPlanner
+from lib.category_enhancer import CategoryEnhancer
 from lib.applier import BatchApplier
 
 logger = logging.getLogger(__name__)
@@ -29,7 +35,21 @@ class SequentialEnhancer:
     - If score unchanged: keep fix (no harm)
     """
 
-    FIX_ORDER = ["metric_view", "metadata", "sample_query", "instruction"]
+    # Legacy fix order (3 categories)
+    LEGACY_FIX_ORDER = ["metric_view", "metadata", "sample_query", "instruction"]
+
+    # Category-based fix order (9 categories)
+    CATEGORY_FIX_ORDER = [
+        "instruction_fix",
+        "join_specs_delete",
+        "join_specs_add",
+        "sql_snippets_delete",
+        "sql_snippets_add",
+        "metadata_delete",
+        "metadata_add",
+        "sample_queries_delete",
+        "sample_queries_add",
+    ]
 
     def __init__(
         self,
@@ -37,7 +57,8 @@ class SequentialEnhancer:
         space_cloner,
         scorer,
         sql_executor=None,
-        progress_callback: Callable[[str, str], None] = None
+        progress_callback: Callable[[str, str], None] = None,
+        use_category_mode: bool = True
     ):
         """
         Initialize sequential enhancer.
@@ -48,21 +69,35 @@ class SequentialEnhancer:
             scorer: BenchmarkScorer for evaluating changes
             sql_executor: SQLExecutor for metric view creation (optional)
             progress_callback: Optional callback(message, level) for progress updates
+            use_category_mode: If True, use category-based analysis (9 LLM calls).
+                               If False, use legacy per-question analysis.
         """
         self.llm_client = llm_client
         self.space_cloner = space_cloner
         self.scorer = scorer
         self.sql_executor = sql_executor
         self.progress_callback = progress_callback or (lambda m, l: None)
+        self.use_category_mode = use_category_mode
 
-        # Initialize planner
-        self.planner = EnhancementPlanner(llm_client)
+        # Initialize planners
+        self.legacy_planner = EnhancementPlanner(llm_client)
+        self.category_planner = CategoryEnhancer(llm_client)
 
         # Initialize applier
         self.applier = BatchApplier(
             space_api=space_cloner,
             sql_executor=sql_executor
         )
+
+    @property
+    def FIX_ORDER(self):
+        """Return the appropriate fix order based on mode."""
+        return self.CATEGORY_FIX_ORDER if self.use_category_mode else self.LEGACY_FIX_ORDER
+
+    @property
+    def planner(self):
+        """Return the appropriate planner based on mode."""
+        return self.category_planner if self.use_category_mode else self.legacy_planner
 
     def _log(self, message: str, level: str = "info"):
         """Log message and call progress callback."""
@@ -86,9 +121,25 @@ class SequentialEnhancer:
         Args:
             benchmark_results: Results from BenchmarkScorer.score()
             space_config: Current Genie Space configuration
+            parallel_workers: Number of parallel LLM calls
 
         Returns:
-            Grouped fixes by category:
+            Grouped fixes by category.
+
+            Category mode (9 categories):
+            {
+                "instruction_fix": [...],
+                "sample_queries_delete": [...],
+                "sample_queries_add": [...],
+                "metadata_delete": [...],
+                "metadata_add": [...],
+                "sql_snippets_delete": [...],
+                "sql_snippets_add": [...],
+                "join_specs_delete": [...],
+                "join_specs_add": [...]
+            }
+
+            Legacy mode (4 categories):
             {
                 "metric_view": [...],
                 "metadata": [...],
@@ -96,7 +147,8 @@ class SequentialEnhancer:
                 "instruction": [...]
             }
         """
-        self._log("Analyzing failures and generating fixes...")
+        mode_name = "Category-based" if self.use_category_mode else "Legacy per-question"
+        self._log(f"Analyzing failures ({mode_name} mode)...")
 
         # Extract failed benchmarks
         failed_benchmarks = [
@@ -109,6 +161,14 @@ class SequentialEnhancer:
             return {cat: [] for cat in self.FIX_ORDER}
 
         self._log(f"Found {len(failed_benchmarks)} failures to analyze")
+
+        if self.use_category_mode:
+            # Category-based: 9 LLM calls total (constant)
+            self._log(f"Using category-based analysis: 9 LLM calls")
+        else:
+            # Legacy: N failures × 3 categories LLM calls
+            total_calls = len(failed_benchmarks) * 3
+            self._log(f"Using legacy analysis: {total_calls} LLM calls ({len(failed_benchmarks)} × 3)")
 
         # Generate fix plan
         grouped_fixes = self.planner.generate_plan(
@@ -323,6 +383,26 @@ class SequentialEnhancer:
         elif fix_type == "delete_metric_view":
             config = self._delete_metric_view(config, fix)
 
+        # SQL snippet fixes
+        elif fix_type == "add_filter":
+            config = self._add_sql_snippet(config, fix, "filters")
+        elif fix_type == "delete_filter":
+            config = self._delete_sql_snippet(config, fix, "filters")
+        elif fix_type == "add_expression":
+            config = self._add_sql_snippet(config, fix, "expressions")
+        elif fix_type == "delete_expression":
+            config = self._delete_sql_snippet(config, fix, "expressions")
+        elif fix_type == "add_measure":
+            config = self._add_sql_snippet(config, fix, "measures")
+        elif fix_type == "delete_measure":
+            config = self._delete_sql_snippet(config, fix, "measures")
+
+        # Join spec fixes
+        elif fix_type == "add_join_spec":
+            config = self._add_join_spec(config, fix)
+        elif fix_type == "delete_join_spec":
+            config = self._delete_join_spec(config, fix)
+
         else:
             logger.warning(f"Unknown fix type: {fix_type}")
 
@@ -485,10 +565,15 @@ class SequentialEnhancer:
 
     def _update_text_instruction(self, config: Dict, fix: Dict) -> Dict:
         """Update text instructions."""
-        instruction_text = fix.get("instruction_text")
+        # Support both legacy "instruction_text" and new "content" format
+        instruction_text = fix.get("instruction_text") or fix.get("content")
 
         if not instruction_text:
             return config
+
+        # If content is a list, join with newlines
+        if isinstance(instruction_text, list):
+            instruction_text = "\n".join(instruction_text)
 
         instructions = config.setdefault("instructions", {})
         instructions["instruction_text"] = instruction_text
@@ -576,5 +661,162 @@ class SequentialEnhancer:
                 logger.info(f"Dropped metric view: {full_name}")
             except Exception as e:
                 logger.warning(f"Failed to drop metric view: {e}")
+
+        return config
+
+    # =========================================================================
+    # SQL Snippet Methods (filters, expressions, measures)
+    # =========================================================================
+
+    def _add_sql_snippet(self, config: Dict, fix: Dict, snippet_type: str) -> Dict:
+        """
+        Add SQL snippet (filter, expression, or measure).
+
+        Args:
+            config: Space configuration
+            fix: Fix dict with sql, display_name, synonyms, alias (for expr/measure)
+            snippet_type: "filters", "expressions", or "measures"
+        """
+        sql = fix.get("sql")
+        display_name = fix.get("display_name")
+
+        if not sql:
+            return config
+
+        instructions = config.setdefault("instructions", {})
+        snippets = instructions.setdefault("sql_snippets", {})
+        snippet_list = snippets.setdefault(snippet_type, [])
+
+        # Generate UUID for id
+        snippet_id = str(uuid.uuid4()).replace("-", "")[:32]
+
+        new_snippet = {
+            "id": snippet_id,
+            "sql": sql if isinstance(sql, list) else [sql],
+            "display_name": display_name or f"Snippet {snippet_id[:8]}",
+        }
+
+        # Add synonyms if provided
+        if fix.get("synonyms"):
+            new_snippet["synonyms"] = fix["synonyms"]
+
+        # Add alias for expressions and measures
+        if snippet_type in ("expressions", "measures"):
+            alias = fix.get("alias")
+            if alias:
+                new_snippet["alias"] = alias
+
+        snippet_list.append(new_snippet)
+        logger.info(f"Added {snippet_type[:-1]}: {display_name or snippet_id[:8]}")
+
+        return config
+
+    def _delete_sql_snippet(self, config: Dict, fix: Dict, snippet_type: str) -> Dict:
+        """
+        Delete SQL snippet by id, alias, or display_name.
+
+        Args:
+            config: Space configuration
+            fix: Fix dict with id, alias, or display_name
+            snippet_type: "filters", "expressions", or "measures"
+        """
+        snippet_id = fix.get("id")
+        alias = fix.get("alias")
+        display_name = fix.get("display_name")
+
+        if not any([snippet_id, alias, display_name]):
+            return config
+
+        instructions = config.get("instructions", {})
+        snippets = instructions.get("sql_snippets", {})
+        snippet_list = snippets.get(snippet_type, [])
+
+        filtered = [
+            s for s in snippet_list
+            if not (
+                (snippet_id and s.get("id") == snippet_id) or
+                (alias and s.get("alias") == alias) or
+                (display_name and s.get("display_name") == display_name)
+            )
+        ]
+
+        if len(filtered) < len(snippet_list):
+            snippets[snippet_type] = filtered
+            logger.info(f"Deleted {snippet_type[:-1]}: {snippet_id or alias or display_name}")
+
+        return config
+
+    # =========================================================================
+    # Join Spec Methods
+    # =========================================================================
+
+    def _add_join_spec(self, config: Dict, fix: Dict) -> Dict:
+        """
+        Add join specification.
+
+        Args:
+            config: Space configuration
+            fix: Fix dict with left_table, right_table, sql, comment
+        """
+        left_table = fix.get("left_table")
+        right_table = fix.get("right_table")
+        sql = fix.get("sql")
+
+        if not all([left_table, right_table, sql]):
+            return config
+
+        instructions = config.setdefault("instructions", {})
+        join_specs = instructions.setdefault("join_specs", [])
+
+        # Generate UUID for id
+        join_id = str(uuid.uuid4()).replace("-", "")[:32]
+
+        new_join = {
+            "id": join_id,
+            "left_table": left_table,
+            "right_table": right_table,
+            "sql": sql if isinstance(sql, list) else [sql],
+        }
+
+        # Add comment if provided
+        if fix.get("comment"):
+            new_join["comment"] = fix["comment"] if isinstance(fix["comment"], list) else [fix["comment"]]
+
+        join_specs.append(new_join)
+        logger.info(f"Added join_spec: {left_table} <-> {right_table}")
+
+        return config
+
+    def _delete_join_spec(self, config: Dict, fix: Dict) -> Dict:
+        """
+        Delete join specification by id or table pair.
+
+        Args:
+            config: Space configuration
+            fix: Fix dict with id, or left_table and right_table
+        """
+        join_id = fix.get("id")
+        left_table = fix.get("left_table")
+        right_table = fix.get("right_table")
+
+        if not join_id and not (left_table and right_table):
+            return config
+
+        instructions = config.get("instructions", {})
+        join_specs = instructions.get("join_specs", [])
+
+        filtered = [
+            j for j in join_specs
+            if not (
+                (join_id and j.get("id") == join_id) or
+                (left_table and right_table and
+                 j.get("left_table") == left_table and
+                 j.get("right_table") == right_table)
+            )
+        ]
+
+        if len(filtered) < len(join_specs):
+            instructions["join_specs"] = filtered
+            logger.info(f"Deleted join_spec: {join_id or f'{left_table} <-> {right_table}'}")
 
         return config
