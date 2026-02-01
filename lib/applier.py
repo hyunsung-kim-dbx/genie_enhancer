@@ -25,8 +25,18 @@ class BatchApplier:
     4. Instructions
     """
 
-    # DEPRECATED: metric_view removed from CategoryEnhancer
-    FIX_ORDER = ["metadata", "sample_query", "instruction"]
+    # Category-based fix order (9 categories from CategoryEnhancer)
+    FIX_ORDER = [
+        "instruction_fix",
+        "join_specs_delete",
+        "join_specs_add",
+        "sql_snippets_delete",
+        "sql_snippets_add",
+        "metadata_delete",
+        "metadata_add",
+        "sample_queries_delete",
+        "sample_queries_add",
+    ]
 
     def __init__(self, space_api, sql_executor=None, config: Dict = None):
         """
