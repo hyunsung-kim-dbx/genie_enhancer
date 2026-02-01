@@ -128,6 +128,12 @@ class BatchApplier:
         if applied and not dry_run:
             logger.info(f"\nUpdating Genie Space with {len(applied)} changes...")
             try:
+                # Debug: dump config to file for inspection
+                debug_file = "debug_config_to_apply.json"
+                with open(debug_file, "w", encoding="utf-8") as f:
+                    json.dump(config_after, f, ensure_ascii=False, indent=2)
+                logger.info(f"Debug: Config dumped to {debug_file}")
+
                 # Convert dict to JSON string for API
                 self.space_api.update_space(space_id, json.dumps(config_after))
                 logger.info("✅ Genie Space updated successfully")
@@ -548,11 +554,15 @@ class BatchApplier:
         new_snippet = {
             "id": uuid.uuid4().hex,
             "sql": sql if isinstance(sql, list) else [sql],
-            "display_name": display_name or f"Snippet",
+            "display_name": display_name or "Snippet",
         }
 
-        if fix.get("synonyms"):
-            new_snippet["synonyms"] = fix["synonyms"]
+        # Ensure synonyms is a list
+        synonyms = fix.get("synonyms")
+        if synonyms:
+            if isinstance(synonyms, str):
+                synonyms = [synonyms]
+            new_snippet["synonyms"] = synonyms
 
         if snippet_type in ("expressions", "measures"):
             alias = fix.get("alias")
