@@ -415,6 +415,16 @@ class SpaceCloner:
                     key=lambda x: x.get("id", "")
                 )
 
+            # Sort sql_snippets (filters, expressions, measures) by id
+            if "sql_snippets" in instructions and instructions["sql_snippets"]:
+                snippets = instructions["sql_snippets"]
+                for snippet_type in ["filters", "expressions", "measures"]:
+                    if snippet_type in snippets and snippets[snippet_type]:
+                        snippets[snippet_type] = sorted(
+                            snippets[snippet_type],
+                            key=lambda x: x.get("id", "")
+                        )
+
         # Sort sample_questions
         if "config" in config:
             cfg = config["config"]
