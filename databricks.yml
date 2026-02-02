@@ -56,17 +56,35 @@ sync:
     - "schema"
     - "workflows"
 
-# App resource definition - enables secret interpolation
+# Base resources (can be overridden per target)
 resources:
   apps:
     genie_enhancer_app:
-      name: 'genie-enhancer'
-      description: 'Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes'
-      source_code_path: ${workspace.file_path}/files/
+      name: genie-enhancer
+      description: Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes
+      permissions:
+        - group_name: users
+          level: CAN_USE
 
+# Target environments
 targets:
   dev:
     mode: development
     default: true
     workspace:
       host: https://krafton-sandbox.cloud.databricks.com/
+    resources:
+      apps:
+        genie_enhancer_app:
+          # Override app name with -dev suffix
+          name: genie-enhancer-dev
+          # Use bundle deployment path
+          source_code_path: ${workspace.file_path}/files/
+          config:
+            env:
+              # Override with dev-specific secrets
+              - name: DATABRICKS_TOKEN
+                value: "{{secrets/genie-enhancement/service-token}}"
+
+              - name: DATABRICKS_HTTP_PATH
+                value: "{{secrets/genie-enhancement/sql-warehouse-http-path}}"
