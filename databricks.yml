@@ -4,11 +4,22 @@
 bundle:
   name: genie_enhancer
 
+sync:
+  exclude:
+    - "frontend/.next"
+    - "frontend/node_modules"
+    - ".venv"
+    - ".git"
+    - "__pycache__"
+    - "*.pyc"
+    - ".pytest_cache"
+    - "*.egg-info"
+
 resources:
   apps:
     genie_enhancer_app:
       name: 'genie-enhancer'
-      source_code_path: ./app
+      source_code_path: .
       description: 'Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes'
 
 targets:

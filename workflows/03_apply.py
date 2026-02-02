@@ -47,10 +47,10 @@ notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext(
 project_root = "/Workspace" + "/".join(notebook_path.split("/")[:-2])
 sys.path.insert(0, project_root)
 
-from lib.state import JobState
-from lib.space_api import SpaceUpdater
-from lib.sql import SQLExecutor
-from lib.applier import BatchApplier
+from enhancer.utils.state import JobState
+from enhancer.api.space_api import SpaceUpdater
+from enhancer.utils.sql import SQLExecutor
+from enhancer.enhancement.applier import BatchApplier
 
 # COMMAND ----------
 

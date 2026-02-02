@@ -84,3 +84,17 @@ temp/
 # Build artifacts
 *.pyc
 *.pyo
+
+# Frontend / Node.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock

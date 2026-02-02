@@ -14,18 +14,18 @@ Modules:
 - state: Job state management (Delta tables)
 """
 
-from lib.genie_client import GenieConversationalClient
-from lib.space_api import SpaceUpdater
-from lib.scorer import BenchmarkScorer
-from lib.benchmark_parser import BenchmarkParser, BenchmarkLoader
-from lib.llm import DatabricksLLMClient
-from lib.sql import SQLExecutor
-from lib.enhancer import EnhancementPlanner
-from lib.applier import BatchApplier
-from lib.state import JobState, get_job_state
-from lib.reporter import ProgressReporter
-from lib.space_cloner import SpaceCloner
-from lib.sequential_enhancer import SequentialEnhancer
+from enhancer.api.genie_client import GenieConversationalClient
+from enhancer.api.space_api import SpaceUpdater
+from enhancer.scoring.scorer import BenchmarkScorer
+from enhancer.scoring.benchmark_parser import BenchmarkParser, BenchmarkLoader
+from enhancer.llm.llm import DatabricksLLMClient
+from enhancer.utils.sql import SQLExecutor
+from enhancer.enhancement.enhancer import EnhancementPlanner
+from enhancer.enhancement.applier import BatchApplier
+from enhancer.utils.state import JobState, get_job_state
+from enhancer.utils.reporter import ProgressReporter
+from enhancer.api.space_cloner import SpaceCloner
+from enhancer.enhancement.sequential_enhancer import SequentialEnhancer
 
 __all__ = [
     # API Clients

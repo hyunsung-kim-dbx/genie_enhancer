@@ -1,6 +1,32 @@
+# Runtime configuration for Genie Space Enhancement System
 command:
-  - "streamlit"
-  - "run"
-  - "app.py"
-  - "--server.address=0.0.0.0"
-  - "--server.headless=true"
+  - uvicorn
+  - backend.main:app
+  - --host
+  - '0.0.0.0'
+  - --port
+  - '8000'
+
+env:
+  # Databricks workspace connection (automatically injected by Databricks Apps)
+  - name: DATABRICKS_HOST
+    value: "{{workspace.host}}"
+
+  - name: DATABRICKS_SERVER_HOSTNAME
+    value: "{{workspace.server_hostname}}"
+
+  # Databricks authentication token (from secrets scope)
+  - name: DATABRICKS_TOKEN
+    value: "{{secrets/genie-enhancement/service-token}}"
+
+  # SQL Warehouse HTTP Path (from secrets scope)
+  - name: DATABRICKS_HTTP_PATH
+    value: "{{secrets/genie-enhancement/sql-warehouse-http-path}}"
+
+  # Frontend static export location (Next.js output: 'export')
+  - name: FRONTEND_EXPORT_DIR
+    value: "frontend/out"
+
+  # Python unbuffered output
+  - name: PYTHONUNBUFFERED
+    value: "1"

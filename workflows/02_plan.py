@@ -48,10 +48,10 @@ notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext(
 project_root = "/Workspace" + "/".join(notebook_path.split("/")[:-2])
 sys.path.insert(0, project_root)
 
-from lib.state import JobState
-from lib.llm import DatabricksLLMClient
-from lib.space_api import SpaceUpdater
-from lib.category_enhancer import CategoryEnhancer
+from enhancer.utils.state import JobState
+from enhancer.llm.llm import DatabricksLLMClient
+from enhancer.api.space_api import SpaceUpdater
+from enhancer.enhancement.category_enhancer import CategoryEnhancer
 from pathlib import Path
 
 # COMMAND ----------

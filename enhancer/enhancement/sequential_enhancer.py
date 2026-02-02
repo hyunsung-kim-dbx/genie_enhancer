@@ -18,9 +18,9 @@ import logging
 import uuid
 from typing import Dict, List, Callable, Optional
 
-from lib.enhancer import EnhancementPlanner
-from lib.category_enhancer import CategoryEnhancer
-from lib.applier import BatchApplier
+from enhancer.enhancement.enhancer import EnhancementPlanner
+from enhancer.enhancement.category_enhancer import CategoryEnhancer
+from enhancer.enhancement.applier import BatchApplier
 
 logger = logging.getLogger(__name__)
 

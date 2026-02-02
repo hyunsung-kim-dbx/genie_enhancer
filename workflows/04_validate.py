@@ -54,11 +54,11 @@ notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext(
 project_root = "/Workspace" + "/".join(notebook_path.split("/")[:-2])
 sys.path.insert(0, project_root)
 
-from lib.state import JobState
-from lib.genie_client import GenieConversationalClient
-from lib.scorer import BenchmarkScorer
-from lib.llm import DatabricksLLMClient
-from lib.sql import SQLExecutor
+from enhancer.utils.state import JobState
+from enhancer.api.genie_client import GenieConversationalClient
+from enhancer.scoring.scorer import BenchmarkScorer
+from enhancer.llm.llm import DatabricksLLMClient
+from enhancer.utils.sql import SQLExecutor
 
 # COMMAND ----------
 

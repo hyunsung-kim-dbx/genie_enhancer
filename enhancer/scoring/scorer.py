@@ -15,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lib.genie_client import GenieConversationalClient
-from lib.sql import SQLExecutor
+from enhancer.api.genie_client import GenieConversationalClient
+from enhancer.utils.sql import SQLExecutor
 from prompts.prompt_loader import PromptLoader
 
 logging.basicConfig(level=logging.INFO)

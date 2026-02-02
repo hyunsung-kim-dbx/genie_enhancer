@@ -4,12 +4,36 @@ Automated improvement system for Databricks Genie Spaces using benchmark-driven 
 
 ## What It Does
 
-1. **Score** - Evaluate Genie Space against Q&A benchmarks ⚡ **NEW: 13x faster with batch scoring**
-2. **Plan** - Analyze failures, generate ALL fixes at once (domain-agnostic pattern learning)
+1. **Score** - Evaluate Genie Space against Q&A benchmarks (⚡ 13x faster with batch mode)
+2. **Plan** - Analyze failures and generate ALL fixes at once using category-based approach
 3. **Apply** - Apply ALL fixes in ONE batch update
 4. **Validate** - Re-score and check improvement
 
-## 🚀 Performance
+## 🚀 Quick Start
+
+### Web UI (Recommended)
+
+```bash
+# Start backend
+.venv/bin/python -m uvicorn backend.main:app --reload --port 8000
+
+# Start frontend (in separate terminal)
+cd frontend && npm run dev
+```
+
+Access at: `http://localhost:3000`
+
+### CLI
+
+```bash
+# Full workflow
+.venv/bin/python enhancer.py score --host $HOST --token $TOKEN --space-id $SPACE_ID --warehouse-id $WAREHOUSE_ID --benchmarks benchmarks.json
+.venv/bin/python enhancer.py plan --host $HOST --token $TOKEN --space-id $SPACE_ID --failed-results output/score_results.json
+.venv/bin/python enhancer.py apply --host $HOST --token $TOKEN --space-id $SPACE_ID --warehouse-id $WAREHOUSE_ID --plan output/enhancement_plan.json
+.venv/bin/python enhancer.py validate --host $HOST --token $TOKEN --space-id $SPACE_ID --warehouse-id $WAREHOUSE_ID --benchmarks benchmarks.json
+```
+
+## 📊 Performance
 
 | Scoring Mode | 20 Benchmarks | Speedup |
 |--------------|--------------|---------|
@@ -17,176 +41,219 @@ Automated improvement system for Databricks Genie Spaces using benchmark-driven 
 | Parallel (v2) | ~1.5 min | 4.6x |
 | **Batch (v3)** | **~30s** | **13x** |
 
-Batch mode includes safety measures:
-- ✅ Rate limiting (semaphore)
-- ✅ Retry with exponential backoff
-- ✅ Circuit breaker (auto-fallback to sequential)
-- ✅ Per-query timeout handling
-- ✅ Graceful degradation
-
-## Architecture
+## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│              4-STAGE DATABRICKS JOB PIPELINE                    │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐
-│  │  Stage 1  │───▶│  Stage 2  │───▶│  Stage 3  │───▶│  Stage 4  │
-│  │   SCORE   │    │   PLAN    │    │   APPLY   │    │ VALIDATE  │
-│  └───────────┘    └───────────┘    └───────────┘    └───────────┘
-│       │                │                │                │
-│       ▼                ▼                ▼                ▼
-│  ┌─────────────────────────────────────────────────────────────┐
-│  │              DELTA TABLES (State & Visibility)              │
-│  └─────────────────────────────────────────────────────────────┘
-│                                                                 │
-│  If target not reached → Trigger new job run (Loop N+1)         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│         GENIE ENHANCEMENT SYSTEM             │
+├─────────────────────────────────────────────┤
+│                                              │
+│  Frontend (Next.js) → Backend (FastAPI)     │
+│           ↓                ↓                 │
+│      Enhancer Core Package                  │
+│           ↓                                  │
+│   Databricks Platform                       │
+│   - Genie Spaces                            │
+│   - SQL Warehouses                          │
+│   - LLM Endpoints                           │
+│                                              │
+└─────────────────────────────────────────────┘
 ```
 
-## Folder Structure
+### Directory Structure
 
 ```
 genie_enhancer/
-├── lib/                     # Python library
-│   ├── genie_client.py      # Genie Conversational API
-│   ├── space_api.py         # Genie Space import/export
-│   ├── scorer.py            # Benchmark scoring
-│   ├── enhancer.py          # Fix generation (batch)
-│   ├── applier.py           # Fix application (batch)
-│   ├── llm.py               # Databricks LLM client
-│   ├── sql.py               # SQL executor
-│   └── state.py             # Job state (Delta)
-├── workflows/               # Databricks Workflows
-│   ├── 01_score.py          # Stage 1: Score benchmarks
-│   ├── 02_plan.py           # Stage 2: Generate fixes
-│   ├── 03_apply.py          # Stage 3: Apply ALL fixes
-│   ├── 04_validate.py       # Stage 4: Validate results
-│   └── orchestrator.py      # Job coordinator
-├── app/                     # Databricks App
-│   └── main.py              # Streamlit UI
-├── prompts/                 # LLM prompts
-├── benchmarks/              # Test data
-├── config/                  # Configuration
-│   ├── job.yaml             # Job definition
-│   └── app.yaml             # App config
-└── docs/                    # Documentation
+├── backend/              # FastAPI service
+│   ├── main.py          # API entry point
+│   ├── middleware/      # Authentication
+│   └── services/        # Job management, storage
+├── frontend/            # Next.js web interface
+│   ├── app/            # Pages
+│   └── components/     # React components
+├── enhancer/           # Core Python package
+│   ├── api/           # Genie API clients
+│   ├── scoring/       # Benchmark evaluation
+│   ├── enhancement/   # Fix generation & application
+│   ├── llm/          # LLM integration
+│   └── utils/        # SQL, state, reporting
+├── workflows/         # Databricks job workflows
+├── prompts/          # LLM prompt templates
+└── enhancer.py       # CLI entry point
 ```
 
-## Quick Start
-
-### 1. Basic Usage (Batch Mode - Recommended)
+## 🔧 Installation
 
 ```bash
-python run_enhancement.py \
-  --host workspace.cloud.databricks.com \
-  --token $DATABRICKS_TOKEN \
-  --space-id $GENIE_SPACE_ID \
-  --warehouse-id $WAREHOUSE_ID \
+# Create virtual environment
+python3 -m venv .venv
+
+# Install dependencies
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r backend/requirements.txt
+
+# Install frontend dependencies
+cd frontend && npm install
+```
+
+## 🌐 Web UI Features
+
+- **Session Management**: Multiple enhancement sessions with history
+- **4-Step Workflow**: Configure → Score → Plan & Apply → Validate
+- **Real-time Progress**: Job status tracking and progress indicators
+- **Interactive Results**: Visual score comparisons and improvement metrics
+- **File Upload**: Upload benchmark files directly through UI
+
+## 💻 CLI Features
+
+- **Modular Commands**: Run individual steps or full pipeline
+- **Flexible Configuration**: Command-line options or environment variables
+- **JSON Output**: Structured results for automation
+- **Dry Run Mode**: Preview changes without applying
+
+## 📝 Enhancement Categories
+
+The system uses 9 fix categories:
+
+1. **instruction_fix** - AI guidance improvements
+2. **join_specs_delete/add** - Join relationship fixes
+3. **sql_snippets_delete/add** - SQL expression fixes
+4. **metadata_delete/add** - Table metadata fixes
+5. **sample_queries_delete/add** - Example query fixes
+
+## 🚢 Deployment
+
+### Databricks Apps
+
+```bash
+# Build frontend
+cd frontend && npm run build
+
+# Deploy bundle
+databricks bundle deploy
+```
+
+Access at: `https://<workspace-url>/apps/genie-enhancer`
+
+### Local Development
+
+```bash
+# Terminal 1: Backend
+.venv/bin/python -m uvicorn backend.main:app --reload
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+```
+
+## 🔐 Configuration
+
+### Environment Variables
+
+```bash
+export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
+export DATABRICKS_TOKEN=dapi...
+export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/...
+```
+
+### Secrets (for Databricks Apps)
+
+```bash
+# Create scope
+databricks secrets create-scope genie-enhancement
+
+# Add secrets
+databricks secrets put-secret genie-enhancement service-token
+databricks secrets put-secret genie-enhancement sql-warehouse-http-path
+```
+
+## 📖 Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed system architecture
+- [CLAUDE.md](CLAUDE.md) - Development guidance
+- [.claude/rules/](.claude/rules/) - Project-specific rules
+
+## 🛠️ Development
+
+### Project Rules
+
+This project follows specific rules enforced by Claude Code:
+
+- **Always use `.venv/bin/python`** for Python commands (never `python` or `python3`)
+- **Never delete the Databricks app** - only deploy updates
+- See `.claude/rules/` for complete guidelines
+
+### Adding Features
+
+1. **New Enhancement Category**: Update `CategoryEnhancer` and prompts
+2. **New Frontend Step**: Add component and update workflow
+3. **New API Endpoint**: Add to `backend/main.py` and create task function
+
+## 🧪 Testing
+
+Currently manual testing through:
+- CLI commands
+- Web UI workflow
+- Databricks job execution
+
+## 📊 Example Workflow
+
+```bash
+# 1. Score current state
+.venv/bin/python enhancer.py score \
+  --host https://workspace.databricks.com \
+  --token $TOKEN \
+  --space-id abc123 \
+  --warehouse-id xyz789 \
   --benchmarks benchmarks/kpi_benchmark.json
+
+# Output: Score: 65.0% (13/20)
+
+# 2. Generate enhancement plan
+.venv/bin/python enhancer.py plan \
+  --host https://workspace.databricks.com \
+  --token $TOKEN \
+  --space-id abc123 \
+  --failed-results output/score_results.json
+
+# Output: Generated 24 fixes across 6 categories
+
+# 3. Apply fixes
+.venv/bin/python enhancer.py apply \
+  --host https://workspace.databricks.com \
+  --token $TOKEN \
+  --space-id abc123 \
+  --warehouse-id xyz789 \
+  --plan output/enhancement_plan.json
+
+# Output: Applied 24 fixes successfully
+
+# 4. Validate improvements
+.venv/bin/python enhancer.py validate \
+  --host https://workspace.databricks.com \
+  --token $TOKEN \
+  --space-id abc123 \
+  --warehouse-id xyz789 \
+  --benchmarks benchmarks/kpi_benchmark.json \
+  --initial-score 0.65 \
+  --target-score 0.90
+
+# Output: New Score: 85.0% (17/20), Improvement: +20.0%
 ```
 
-**Options:**
-- `--genie-concurrent N` - Max concurrent Genie calls (default: 3)
-- `--no-batch` - Use sequential mode instead
-- `--auto-promote` - Auto-promote on success
-- See `docs/USAGE_GUIDE.md` for all options
+## 🤝 Contributing
 
-### 2. Upload to Databricks
+1. Follow `.claude/rules/` guidelines
+2. Use `.venv/bin/python` for all Python commands
+3. Test both CLI and Web UI before committing
+4. Update documentation for new features
 
-```bash
-databricks workspace import-dir genie_enhancer /Workspace/Users/your.email/genie_enhancer
-```
+## 📄 License
 
-### 3. Run Orchestrator
+Internal tool for Databricks Genie Space enhancement.
 
-Open `workflows/orchestrator.py` and set:
-- `space_id`: Your Genie Space ID
-- `databricks_token`: Your token (or use secrets)
-- `warehouse_id`: SQL Warehouse for metric views
-- `target_score`: Target benchmark pass rate (e.g., 0.90)
+## 🆘 Support
 
-Choose mode:
-- `run_inline`: Run all stages in this notebook
-- `create_job`: Create Databricks Job only
-- `create_and_run`: Create and start job
-
-### 3. Monitor Progress
-
-View state in Delta tables:
-```sql
--- Job runs
-SELECT * FROM sandbox.genie_enhancement.genie_job_runs;
-
--- Stage results
-SELECT * FROM sandbox.genie_enhancement.genie_job_stage_results
-WHERE run_id = 'your-run-id';
-```
-
-## Key Concepts
-
-### Batch Apply (Not Sequential)
-
-All fixes are applied in ONE Genie Space API call:
-- Faster execution
-- Single point of failure
-- Clearer before/after comparison
-
-### Multi-Loop Design
-
-Each job run = one loop. If target not reached:
-1. Job completes with status `NEEDS_ANOTHER_LOOP`
-2. User (or automation) triggers new job run
-3. New loop starts with Loop N+1
-
-### Four Fix Categories
-
-1. **Metric Views** - Create UC metric views for complex aggregations
-2. **Metadata** - Table/column descriptions, synonyms
-3. **Sample Queries** - Parameterized query templates
-4. **Instructions** - Text instructions for Genie
-
-## Configuration
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `space_id` | Genie Space ID | Required |
-| `target_score` | Target pass rate (0.0-1.0) | 0.90 |
-| `llm_endpoint` | LLM endpoint name | llama-3.1-70b |
-| `warehouse_id` | SQL Warehouse (for metric views) | Optional |
-| `catalog` | Unity Catalog for state | sandbox |
-| `schema` | Schema for state tables | genie_enhancement |
-
-## Documentation
-
-### Quick Start Guides
-- **[USAGE_GUIDE.md](docs/USAGE_GUIDE.md)** - Complete usage guide with examples
-- **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Deployment instructions
-
-### System Architecture
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - V2 architecture (interactive workflow)
-- **[ARCHITECTURE_V3_ENHANCEMENTS.md](docs/ARCHITECTURE_V3_ENHANCEMENTS.md)** - V3 improvements (batch, UI)
-
-### Features & Integration
-- **[BATCH_SCORING.md](docs/BATCH_SCORING.md)** - Batch scoring system (13x faster)
-- **[GENERALIZATION_CHANGES.md](docs/GENERALIZATION_CHANGES.md)** - Domain-agnostic pattern learning
-- **[STREAMLIT_UI.md](docs/STREAMLIT_UI.md)** - Enhanced UI visual guide
-- **[UI_INTEGRATION.md](docs/UI_INTEGRATION.md)** - UI integration guide
-- **[INTEGRATION_SUMMARY.md](docs/INTEGRATION_SUMMARY.md)** - Complete integration summary
-
-### API References
-- **[Genie_Conversational_API.md](docs/Genie_Conversational_API.md)** - Conversational API
-- **[Databricks_Genie_Space_Import_Export_APIs.md](docs/Databricks_Genie_Space_Import_Export_APIs.md)** - Import/export APIs
-- **[Genie_Space_API_Reference.md](docs/Genie_Space_API_Reference.md)** - API reference
-
-### Best Practices
-- **[Genie_Space_Best_Practices.md](docs/Genie_Space_Best_Practices.md)** - Genie Space best practices
-
-### Historical Documentation
-- **[docs/archive/](docs/archive/)** - Archived documentation (see INDEX.md)
-
-## License
-
-Internal Databricks tool for Genie Space enhancement.
+For issues or questions:
+- Check [ARCHITECTURE.md](ARCHITECTURE.md) for system details
+- Review [CLAUDE.md](CLAUDE.md) for development guidance
+- Check `.claude/rules/` for project standards

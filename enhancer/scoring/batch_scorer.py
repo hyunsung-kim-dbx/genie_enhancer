@@ -15,8 +15,8 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
-from lib.batch_genie_client import BatchGenieClient
-from lib.sql import SQLExecutor
+from enhancer.api.batch_genie_client import BatchGenieClient
+from enhancer.utils.sql import SQLExecutor
 from prompts.prompt_loader import PromptLoader
 
 logger = logging.getLogger(__name__)

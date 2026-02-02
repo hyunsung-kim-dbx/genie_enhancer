@@ -67,7 +67,7 @@ workflows_dir = "/Workspace" + "/".join(notebook_path.split("/")[:-1])
 project_root = "/Workspace" + "/".join(notebook_path.split("/")[:-2])
 sys.path.insert(0, project_root)
 
-from lib.state import JobState
+from enhancer.utils.state import JobState
 
 # Initialize state
 state = JobState(catalog=catalog, schema=schema, spark=spark)
