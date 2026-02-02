@@ -644,8 +644,18 @@ elif st.session_state.step == 'setup':
             rate_limit_base_delay=90.0
         )
 
-        if not llm_client.test_connection():
-            st.error("❌ LLM connection failed")
+        # Test LLM connection with detailed error
+        try:
+            test_result = llm_client.generate(
+                prompt="Say 'ok'",
+                temperature=0.0,
+                max_tokens=5
+            )
+            st.success(f"✅ LLM connected: {config['llm_endpoint']}")
+        except Exception as e:
+            st.error(f"❌ LLM connection failed: {e}")
+            st.caption(f"Endpoint: {config['llm_endpoint']}")
+            st.caption("Check if endpoint exists and you have access.")
             st.stop()
 
         # SQL executor uses USER token (respects user data permissions)
