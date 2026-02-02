@@ -19,10 +19,6 @@ env:
   - name: DATABRICKS_TOKEN
     value: "{{secrets/genie-enhancement/service-token}}"
 
-  # SQL Warehouse HTTP Path (from secrets scope)
-  - name: DATABRICKS_HTTP_PATH
-    value: "{{secrets/genie-enhancement/sql-warehouse-http-path}}"
-
   # Frontend static export location (Next.js output: 'export')
   - name: FRONTEND_EXPORT_DIR
     value: "frontend/out"
