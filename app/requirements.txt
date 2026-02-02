@@ -1,0 +1,17 @@
+# Databricks Apps Dependencies
+# Required for Databricks Apps deployment
+
+# Databricks SDK (auto-handles authentication)
+databricks-sdk>=0.20.0
+
+# SQL Connector for warehouse queries
+databricks-sql-connector>=3.0.0
+
+# Streamlit UI framework
+streamlit>=1.30.0
+
+# Data handling
+pandas>=2.0.0
+
+# HTTP requests (for Genie API calls)
+requests>=2.31.0

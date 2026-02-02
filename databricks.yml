@@ -1,0 +1,20 @@
+# Databricks Asset Bundle Configuration
+# Deploy: databricks bundle deploy --target dev
+
+bundle:
+  name: genie_enhancer
+
+resources:
+  apps:
+    genie_enhancer_app:
+      name: 'genie-enhancer'
+      source_code_path: ./app
+      description: 'Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes'
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      # Uses profile from ~/.databrickscfg or DATABRICKS_HOST env var
+      host: https://krafton-sandbox.cloud.databricks.com/

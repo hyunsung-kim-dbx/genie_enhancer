@@ -1,14 +1,21 @@
 # Genie Enhancement System Requirements
+# Install: pip install -r requirements.txt
 
 # Core dependencies
 requests>=2.31.0
 pyyaml>=6.0
 
+# Databricks SDK (for unified authentication)
+# Auto-handles credentials in Databricks Apps environment
+databricks-sdk>=0.20.0
+
+# SQL Connector (for warehouse queries)
+databricks-sql-connector>=3.0.0
+
 # Streamlit app dependencies
-streamlit>=1.28.0
+streamlit>=1.30.0
 plotly>=5.17.0
 pandas>=2.0.0
 
-# Databricks (available in Databricks runtime, not needed to install)
-# pyspark - provided by Databricks
-# databricks-sdk - provided by Databricks
+# Note: In Databricks runtime, some packages are pre-installed
+# pyspark - provided by Databricks runtime

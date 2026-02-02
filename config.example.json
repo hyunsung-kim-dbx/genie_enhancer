@@ -1,0 +1,11 @@
+{
+    "databricks_host": "your-workspace.cloud.databricks.com",
+    "databricks_token": "YOUR_TOKEN_HERE",
+    "space_id": "your-genie-space-id",
+    "warehouse_id": "your-warehouse-id",
+    "benchmarks": "benchmarks/fixed_benchmark_final.json",
+    "llm_endpoint": "databricks-claude-sonnet-4",
+    "target_score": 0.90,
+    "indexing_wait": 60,
+    "max_loops": 3
+}
