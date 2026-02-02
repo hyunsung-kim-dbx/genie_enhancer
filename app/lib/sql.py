@@ -21,20 +21,31 @@ class SQLExecutor:
 
         Args:
             host: Databricks workspace host
-            token: Personal access token
+            token: Personal access token (or None to use env OAuth)
             warehouse_id: SQL Warehouse ID to execute queries on
         """
         from databricks.sdk import WorkspaceClient
+        from databricks.sdk.config import Config
 
         self.host = host.replace("https://", "").replace("http://", "")
         self.warehouse_id = warehouse_id
 
-        # Initialize SDK client
-        self.client = WorkspaceClient(
-            host=f"https://{self.host}",
-            token=token
-        )
-        logger.info(f"SQLExecutor initialized with SDK (warehouse: {warehouse_id})")
+        # Initialize SDK client with explicit config to avoid auth conflicts
+        # When token is provided, use PAT auth only (ignore env OAuth)
+        if token:
+            config = Config(
+                host=f"https://{self.host}",
+                token=token,
+                # Explicitly disable OAuth to avoid conflict
+                client_id=None,
+                client_secret=None,
+            )
+            self.client = WorkspaceClient(config=config)
+            logger.info(f"SQLExecutor initialized with PAT auth (warehouse: {warehouse_id})")
+        else:
+            # Use default env-based auth (OAuth from SP)
+            self.client = WorkspaceClient()
+            logger.info(f"SQLExecutor initialized with OAuth auth (warehouse: {warehouse_id})")
 
     def execute(
         self,
