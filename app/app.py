@@ -612,29 +612,33 @@ elif st.session_state.step == 'setup':
         # Get authentication
         host = config['databricks_host']
 
-        if 'workspace_client' in config:
-            # Use SDK authentication (Service Principal) for admin operations
-            headers = config['workspace_client'].config.authenticate()
-            sp_token = headers.get('Authorization', '').replace('Bearer ', '')
-        else:
-            # Use manual token for everything
-            sp_token = config['databricks_token']
+        # Prefer user token (user-assumed auth) for all operations
+        # This way the app acts with user's permissions
+        user_token = config.get('user_token')
 
-        # User token for SQL queries (respects user permissions)
-        # Falls back to SP token if not available
-        user_token = config.get('user_token') or sp_token
+        if not user_token:
+            # Fallback to SP token if user token not available
+            if 'workspace_client' in config:
+                headers = config['workspace_client'].config.authenticate()
+                user_token = headers.get('Authorization', '').replace('Bearer ', '')
+            else:
+                user_token = config.get('databricks_token')
 
-        # Initialize clients
+        if not user_token:
+            st.error("❌ No authentication token available")
+            st.stop()
+
+        # Initialize clients - ALL use user token (user-assumed auth)
         status.markdown("🔄 Initializing clients...")
         progress.progress(0.2)
 
-        # Space cloning uses SP token (admin operation)
-        space_cloner = SpaceCloner(host=host, token=sp_token)
+        # Space cloning uses USER token (user's permissions)
+        space_cloner = SpaceCloner(host=host, token=user_token)
 
-        # LLM client uses SP token
+        # LLM client uses USER token
         llm_client = DatabricksLLMClient(
             host=host,
-            token=sp_token,
+            token=user_token,
             endpoint_name=config['llm_endpoint'],
             request_delay=10.0,
             rate_limit_base_delay=90.0
@@ -689,14 +693,13 @@ elif st.session_state.step == 'setup':
 
         planner = CategoryEnhancer(llm_client, project_root / "prompts")
 
-        # Applier uses space_cloner (SP token) for space modifications
+        # Applier uses space_cloner (user token) for space modifications
         applier = BatchApplier(
             space_api=space_cloner,
             sql_executor=sql_executor,
         )
 
-        # Store tokens for reference
-        st.session_state.sp_token = sp_token
+        # Store token for reference (all operations use user token)
         st.session_state.user_token = user_token
 
         st.session_state.clients = {
