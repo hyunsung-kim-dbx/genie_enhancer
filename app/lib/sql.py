@@ -24,28 +24,20 @@ class SQLExecutor:
             token: Personal access token (or None to use env OAuth)
             warehouse_id: SQL Warehouse ID to execute queries on
         """
-        from databricks.sdk import WorkspaceClient
-        from databricks.sdk.config import Config
+        import requests
 
         self.host = host.replace("https://", "").replace("http://", "")
         self.warehouse_id = warehouse_id
+        self.token = token
 
-        # Initialize SDK client with explicit config to avoid auth conflicts
-        # When token is provided, use PAT auth only (ignore env OAuth)
-        if token:
-            config = Config(
-                host=f"https://{self.host}",
-                token=token,
-                # Explicitly disable OAuth to avoid conflict
-                client_id=None,
-                client_secret=None,
-            )
-            self.client = WorkspaceClient(config=config)
-            logger.info(f"SQLExecutor initialized with PAT auth (warehouse: {warehouse_id})")
-        else:
-            # Use default env-based auth (OAuth from SP)
-            self.client = WorkspaceClient()
-            logger.info(f"SQLExecutor initialized with OAuth auth (warehouse: {warehouse_id})")
+        # Use requests directly to avoid SDK auth conflicts
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        })
+        self.base_url = f"https://{self.host}"
+        logger.info(f"SQLExecutor initialized with token auth (warehouse: {warehouse_id})")
 
     def execute(
         self,
@@ -54,11 +46,11 @@ class SQLExecutor:
         wait_timeout: str = "50s"  # Databricks API only accepts 5-50 seconds
     ) -> Dict[str, Any]:
         """
-        Execute SQL query using Databricks SDK and return results.
+        Execute SQL query using Databricks SQL Statement API.
 
         Args:
             sql: SQL query to execute
-            timeout: Not used directly (SDK handles timeout)
+            timeout: Total timeout in seconds
             wait_timeout: How long to wait for query completion
 
         Returns:
@@ -73,27 +65,30 @@ class SQLExecutor:
                 "execution_time": float
             }
         """
-        from databricks.sdk.service.sql import StatementState
-
         logger.debug(f"Executing SQL: {sql[:100]}...")
         start_time = time.time()
 
         try:
-            # Execute statement using SDK
-            response = self.client.statement_execution.execute_statement(
-                warehouse_id=self.warehouse_id,
-                statement=sql,
-                wait_timeout=wait_timeout
-            )
+            # Execute statement using REST API
+            url = f"{self.base_url}/api/2.0/sql/statements"
+            payload = {
+                "warehouse_id": self.warehouse_id,
+                "statement": sql,
+                "wait_timeout": wait_timeout
+            }
+
+            response = self.session.post(url, json=payload, timeout=timeout)
+            response.raise_for_status()
+            data = response.json()
 
             execution_time = time.time() - start_time
-            state = response.status.state
+            state = data.get("status", {}).get("state", "UNKNOWN")
 
             logger.debug(f"Statement state: {state}")
 
-            if state == StatementState.SUCCEEDED:
+            if state == "SUCCEEDED":
                 # Extract results
-                result_data = self._extract_results_sdk(response)
+                result_data = self._extract_results(data)
                 logger.debug(f"Query succeeded ({result_data['row_count']} rows, {execution_time:.2f}s)")
 
                 return {
@@ -103,8 +98,8 @@ class SQLExecutor:
                     "execution_time": execution_time
                 }
 
-            elif state in [StatementState.FAILED, StatementState.CANCELED, StatementState.CLOSED]:
-                error_message = response.status.error.message if response.status.error else "Unknown error"
+            elif state in ["FAILED", "CANCELED", "CLOSED"]:
+                error_message = data.get("status", {}).get("error", {}).get("message", "Unknown error")
                 logger.warning(f"Query failed: {error_message}")
 
                 return {
@@ -133,12 +128,12 @@ class SQLExecutor:
                 "execution_time": time.time() - start_time
             }
 
-    def _extract_results_sdk(self, response) -> Dict:
+    def _extract_results(self, data: Dict) -> Dict:
         """
-        Extract query results from SDK response.
+        Extract query results from REST API response.
 
         Args:
-            response: SDK StatementResponse
+            data: API response dict
 
         Returns:
             {
@@ -149,17 +144,21 @@ class SQLExecutor:
         """
         # Get column names from manifest
         columns = []
-        if response.manifest and response.manifest.schema and response.manifest.schema.columns:
-            columns = [col.name for col in response.manifest.schema.columns]
+        manifest = data.get("manifest", {})
+        schema = manifest.get("schema", {})
+        if schema.get("columns"):
+            columns = [col.get("name", f"col_{i}") for i, col in enumerate(schema["columns"])]
 
         # Get data
         rows = []
-        if response.result and response.result.data_array:
-            for row_data in response.result.data_array:
-                row_dict = {}
-                for i, col_name in enumerate(columns):
-                    row_dict[col_name] = row_data[i] if i < len(row_data) else None
-                rows.append(row_dict)
+        result = data.get("result", {})
+        data_array = result.get("data_array", [])
+
+        for row_data in data_array:
+            row_dict = {}
+            for i, col_name in enumerate(columns):
+                row_dict[col_name] = row_data[i] if i < len(row_data) else None
+            rows.append(row_dict)
 
         return {
             "columns": columns,
