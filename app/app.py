@@ -339,7 +339,7 @@ if st.session_state.step == 'configure':
     auth_config, auth_error = get_databricks_config()
 
     if auth_config:
-        st.success(f"✅ Auto-authenticated via {auth_config['auth_type']}")
+        st.success(f"✅ Connected to workspace via {auth_config['auth_type']}")
         st.info(f"Workspace: `{auth_config['host']}`")
 
         # Show user info if available
@@ -349,14 +349,24 @@ if st.session_state.step == 'configure':
         # Store auth config
         st.session_state.auth_config = auth_config
 
-        # Use SP token for listing resources (admin operations)
-        # User token is only for data queries later
-        try:
-            auth_headers = auth_config['workspace_client'].config.authenticate()
-            api_token = auth_headers.get('Authorization', '').replace('Bearer ', '')
-        except:
-            api_token = None
+        # PAT token input for full API access (Genie API requires this)
+        st.markdown("---")
+        st.subheader("🔑 Authentication")
+        st.caption("Genie API requires a Personal Access Token (PAT) for full access.")
 
+        pat_token = st.text_input(
+            "Personal Access Token",
+            type="password",
+            help="Create a PAT in User Settings → Developer → Access tokens"
+        )
+
+        if not pat_token:
+            st.warning("⚠️ Enter your PAT token to access Genie Spaces")
+            api_token = None
+        else:
+            api_token = pat_token
+
+        st.markdown("---")
         col1, col2 = st.columns(2)
 
         with col1:
@@ -440,13 +450,15 @@ if st.session_state.step == 'configure':
         st.markdown("---")
 
         if st.button("Next →", type="primary"):
-            if not space_id or not warehouse_id:
+            if not pat_token:
+                st.error("Please provide your Personal Access Token")
+            elif not space_id or not warehouse_id:
                 st.error("Please provide Space ID and Warehouse ID")
             else:
                 st.session_state.config = {
                     'databricks_host': auth_config['host'],
                     'workspace_client': auth_config['workspace_client'],
-                    'user_token': auth_config.get('user_token'),  # User token for data queries
+                    'user_token': pat_token,  # PAT token for all API calls
                     'user_email': auth_config.get('user_email'),
                     'space_id': space_id,
                     'warehouse_id': warehouse_id,
