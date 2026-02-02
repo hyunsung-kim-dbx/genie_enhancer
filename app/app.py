@@ -635,37 +635,7 @@ elif st.session_state.step == 'setup':
         # Space cloning uses USER token (user's permissions)
         space_cloner = SpaceCloner(host=host, token=user_token)
 
-        # LLM client uses USER token
-        llm_client = DatabricksLLMClient(
-            host=host,
-            token=user_token,
-            endpoint_name=config['llm_endpoint'],
-            request_delay=10.0,
-            rate_limit_base_delay=90.0
-        )
-
-        # Test LLM connection with detailed error
-        try:
-            test_result = llm_client.generate(
-                prompt="Say 'ok'",
-                temperature=0.0,
-                max_tokens=5
-            )
-            st.success(f"✅ LLM connected: {config['llm_endpoint']}")
-        except Exception as e:
-            st.error(f"❌ LLM connection failed: {e}")
-            st.caption(f"Endpoint: {config['llm_endpoint']}")
-            st.caption("Check if endpoint exists and you have access.")
-            st.stop()
-
-        # SQL executor uses USER token (respects user data permissions)
-        sql_executor = SQLExecutor(
-            host=host,
-            token=user_token,
-            warehouse_id=config['warehouse_id']
-        )
-
-        progress.progress(0.4)
+        progress.progress(0.3)
         status.markdown("🔄 Cloning production space...")
 
         # Setup three spaces
@@ -686,8 +656,26 @@ elif st.session_state.step == 'setup':
         st.session_state.production_name = setup_result['production_name']
         st.session_state.initial_config = setup_result['initial_config']
 
-        # Initialize remaining clients
-        # Genie client uses USER token (respects user data permissions)
+        progress.progress(0.8)
+        status.markdown("🔄 Initializing analysis clients...")
+
+        # Initialize LLM client (for analysis step)
+        llm_client = DatabricksLLMClient(
+            host=host,
+            token=user_token,
+            endpoint_name=config['llm_endpoint'],
+            request_delay=10.0,
+            rate_limit_base_delay=90.0
+        )
+
+        # SQL executor uses USER token
+        sql_executor = SQLExecutor(
+            host=host,
+            token=user_token,
+            warehouse_id=config['warehouse_id']
+        )
+
+        # Genie client uses USER token
         genie_client = GenieConversationalClient(
             host=host,
             token=user_token,
@@ -709,9 +697,8 @@ elif st.session_state.step == 'setup':
             sql_executor=sql_executor,
         )
 
-        # Store token for reference (all operations use user token)
+        # Store token and clients
         st.session_state.user_token = user_token
-
         st.session_state.clients = {
             'space_cloner': space_cloner,
             'genie_client': genie_client,
