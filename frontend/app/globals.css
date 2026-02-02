@@ -2,18 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Force light mode - ignore system dark mode preference */
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+  color-scheme: light;
 }
 
 body {
@@ -24,4 +18,37 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+}
+
+/* Force all text to be dark */
+* {
+  color: inherit;
+}
+
+/* Ensure inputs, selects, and buttons have proper colors */
+input,
+select,
+textarea,
+button {
+  color: rgb(31, 41, 55) !important; /* gray-800 */
+  background-color: white !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgb(156, 163, 175) !important; /* gray-400 */
+}
+
+/* Disabled inputs */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: rgb(249, 250, 251) !important; /* gray-50 */
+  color: rgb(107, 114, 128) !important; /* gray-500 */
+}
+
+/* Buttons need their colors preserved */
+button {
+  color: inherit !important;
+  background-color: inherit !important;
 }

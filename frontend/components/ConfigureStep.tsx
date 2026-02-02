@@ -129,18 +129,18 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
   const isValid = config.host && config.token && config.warehouse_id && config.space_id;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">⚙️ Configure Workspace</h2>
+    <div className="space-y-6 text-gray-900">
+      <h2 className="text-2xl font-bold text-gray-900">⚙️ Configure Workspace</h2>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Databricks Host</label>
+          <label className="block text-sm font-medium mb-2 text-gray-700">Databricks Host</label>
           <input
             type="text"
             value={config.host}
             onChange={(e) => setConfig({ ...config, host: e.target.value })}
             placeholder="https://your-workspace.cloud.databricks.com"
-            className="w-full px-4 py-2 border rounded"
+            className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
           />
           {config.host && !config.host.startsWith('https://') && (
             <p className="text-sm text-amber-600 mt-1">⚠️ Host should start with https://</p>
@@ -148,13 +148,13 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Access Token</label>
+          <label className="block text-sm font-medium mb-2 text-gray-700">Access Token</label>
           <input
             type="password"
             value={config.token}
             onChange={(e) => setConfig({ ...config, token: e.target.value })}
             placeholder="dapi..."
-            className="w-full px-4 py-2 border rounded"
+            className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
           />
         </div>
 
@@ -165,14 +165,14 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
         )}
 
         <div>
-          <label className="block text-sm font-medium mb-2">SQL Warehouse</label>
+          <label className="block text-sm font-medium mb-2 text-gray-700">SQL Warehouse</label>
           {loadingWarehouses ? (
             <div className="text-sm text-gray-500 py-2">Loading warehouses...</div>
           ) : warehouses.length > 0 ? (
             <select
               value={config.warehouse_id}
               onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
-              className="w-full px-4 py-2 border rounded"
+              className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
             >
               <option value="">Select a warehouse...</option>
               {warehouses.map((wh) => (
@@ -187,7 +187,7 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
               value={config.warehouse_id}
               onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
               placeholder="Enter warehouse ID manually..."
-              className="w-full px-4 py-2 border rounded"
+              className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
             />
           ) : (
             <input
@@ -195,21 +195,21 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
               value={config.warehouse_id}
               onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
               placeholder="Enter host and token first..."
-              className="w-full px-4 py-2 border rounded bg-gray-50"
+              className="w-full px-4 py-2 border rounded bg-gray-50 text-gray-500"
               disabled
             />
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Genie Space</label>
+          <label className="block text-sm font-medium mb-2 text-gray-700">Genie Space</label>
           {loadingSpaces ? (
             <div className="text-sm text-gray-500 py-2">Loading spaces...</div>
           ) : spaces.length > 0 ? (
             <select
               value={config.space_id}
               onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
-              className="w-full px-4 py-2 border rounded"
+              className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
             >
               <option value="">Select a space...</option>
               {spaces.map((space) => (
@@ -224,7 +224,7 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
               value={config.space_id}
               onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
               placeholder="Enter space ID manually..."
-              className="w-full px-4 py-2 border rounded"
+              className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
             />
           ) : (
             <input
@@ -232,18 +232,18 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
               value={config.space_id}
               onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
               placeholder="Enter host and token first..."
-              className="w-full px-4 py-2 border rounded bg-gray-50"
+              className="w-full px-4 py-2 border rounded bg-gray-50 text-gray-500"
               disabled
             />
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">LLM Endpoint</label>
+          <label className="block text-sm font-medium mb-2 text-gray-700">LLM Endpoint</label>
           <select
             value={config.llm_endpoint}
             onChange={(e) => setConfig({ ...config, llm_endpoint: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
+            className="w-full px-4 py-2 border rounded text-gray-900 bg-white"
           >
             <option value="databricks-gpt-5-2">databricks-gpt-5-2</option>
             <option value="databricks-gpt-4-turbo">databricks-gpt-4-turbo</option>
