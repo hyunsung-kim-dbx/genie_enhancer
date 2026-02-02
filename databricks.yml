@@ -6,27 +6,36 @@ bundle:
 
 sync:
   exclude:
-    - "frontend/.next"
-    - "frontend/node_modules"
-    - ".venv"
-    - ".git"
-    - "__pycache__"
-    - "*.pyc"
-    - ".pytest_cache"
-    - "*.egg-info"
+    - "frontend/.next/**"
+    - "frontend/node_modules/**"
+    - ".venv/**"
+    - ".git/**"
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - ".pytest_cache/**"
+    - "**/*.egg-info/**"
+    - "storage/**"
+    - "output/**"
+    - ".databricks/**"
+    - "worktrees/**"
+    - "reference/**"
+    - "docs/**"
+    - "benchmarks/**"
+    - "config/**"
+    - "schema/**"
+    - "workflows/**"
 
-# App is managed separately via databricks apps CLI
-# resources:
-#   apps:
-#     genie_enhancer_app:
-#       name: 'genie-enhancer'
-#       source_code_path: .
-#       description: 'Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes'
+# App resource definition - enables secret interpolation
+resources:
+  apps:
+    genie_enhancer_app:
+      name: 'genie-enhancer'
+      description: 'Genie Space Enhancement Tool - Improves Genie Space accuracy using AI-generated fixes'
+      source_code_path: ${workspace.file_path}/files/
 
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      # Uses profile from ~/.databrickscfg or DATABRICKS_HOST env var
       host: https://krafton-sandbox.cloud.databricks.com/

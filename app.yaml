@@ -1,23 +1,19 @@
 # Runtime configuration for Genie Space Enhancement System
 command:
-  - uvicorn
-  - backend.main:app
-  - --host
-  - '0.0.0.0'
-  - --port
-  - '8000'
+  - bash
+  - start_app.sh
 
 env:
-  # Databricks workspace connection (automatically injected by Databricks Apps)
-  - name: DATABRICKS_HOST
-    value: "{{workspace.host}}"
-
-  - name: DATABRICKS_SERVER_HOSTNAME
-    value: "{{workspace.server_hostname}}"
-
-  # Databricks authentication token (from secrets scope)
+  # Secrets will be interpolated by bundle deployment
   - name: DATABRICKS_TOKEN
     value: "{{secrets/genie-enhancement/service-token}}"
+
+  - name: DATABRICKS_HTTP_PATH
+    value: "{{secrets/genie-enhancement/sql-warehouse-http-path}}"
+
+  # Python path - ensure imports work
+  - name: PYTHONPATH
+    value: "/app/python/source_code:$PYTHONPATH"
 
   # Frontend static export location (Next.js output: 'export')
   - name: FRONTEND_EXPORT_DIR

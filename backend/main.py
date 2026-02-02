@@ -131,29 +131,59 @@ async def health_check():
 async def get_workspace_config():
     """Get default workspace configuration from environment variables.
 
-    Returns empty if secrets/templates aren't configured, forcing user to provide credentials.
-    This ensures operations happen on behalf of the user with proper Genie permissions.
+    Auto-populates host and token from environment.
+    - Host: From DATABRICKS_HOST env var (set by Databricks Apps)
+    - Token: From DATABRICKS_TOKEN env var (should be interpolated from secrets)
+
+    If token is still a template {{...}}, it means:
+    1. Secret doesn't exist, OR
+    2. App doesn't have permission to read it, OR
+    3. Secret scope/key name is incorrect
+
+    Check: databricks secrets list --scope genie-enhancement
     """
-    # Get host - check if it's a template variable
+    import os
+
+    # Get all DATABRICKS_HOST env vars (there might be duplicates in env)
     host = os.getenv("DATABRICKS_HOST", "")
+
+    # Clean up host
     if host.startswith("{{"):
-        # Template not interpolated, try server hostname
+        # Template not interpolated, try to find the actual value
+        # Check if there's another DATABRICKS_HOST that's not a template
+        host = ""
+
+    if not host:
+        # Fallback to server hostname
         server_hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME", "")
         if server_hostname and not server_hostname.startswith("{{"):
             host = f"https://{server_hostname}"
-        else:
-            host = ""
-    elif host and not host.startswith("http"):
+
+    # Ensure https://
+    if host and not host.startswith("http"):
         host = f"https://{host}"
 
-    # Get token - check if it's a template variable
+    # Get token - should be interpolated from secrets
     token = os.getenv("DATABRICKS_TOKEN", "")
-    if token.startswith("{{"):
-        token = ""  # Secret not configured, force user to provide
+
+    # Check if template is not interpolated
+    token_not_interpolated = token.startswith("{{")
+
+    if token_not_interpolated:
+        # Token is still a template - secret not accessible
+        token = ""
+        print(f"WARNING: DATABRICKS_TOKEN is still a template: {token}")
+        print("This means the secret is not being read from the scope.")
+        print("Check: 1) Secret exists, 2) App has read permission, 3) Secret name is correct")
 
     return {
         "host": host,
         "token": token,
+        "_debug": {
+            "host_raw": os.getenv("DATABRICKS_HOST", ""),
+            "token_is_template": token_not_interpolated,
+            "token_hint": "Check 'databricks secrets list --scope genie-enhancement'" if token_not_interpolated else "Token successfully loaded"
+        }
     }
 
 
@@ -166,18 +196,27 @@ class WorkspaceCredentials(BaseModel):
 @app.post("/api/workspace/warehouses")
 async def list_warehouses(credentials: WorkspaceCredentials):
     """List available SQL Warehouses."""
+    import os
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.config import Config
+
+    # Use credentials from request (user-provided in UI)
+    host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
+
+    # CRITICAL: Explicitly clear OAuth env vars to prevent SDK from picking them up
+    # The Databricks Apps runtime sets these, but we want to use PAT auth instead
+    saved_client_id = os.environ.pop('DATABRICKS_CLIENT_ID', None)
+    saved_client_secret = os.environ.pop('DATABRICKS_CLIENT_SECRET', None)
+
     try:
-        from databricks.sdk import WorkspaceClient
-
-        # Use credentials from request (user-provided in UI)
-        host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
-
-        # If token is provided, use PAT auth. Otherwise SDK will use OAuth from env.
-        if credentials.token:
-            client = WorkspaceClient(host=host, token=credentials.token)
-        else:
-            # Use app's OAuth credentials (DATABRICKS_CLIENT_ID/SECRET from env)
-            client = WorkspaceClient(host=host)
+        # Explicitly use PAT auth with OAuth disabled
+        config = Config(
+            host=host,
+            token=credentials.token,
+            client_id="",  # Empty string to override env var
+            client_secret="",
+        )
+        client = WorkspaceClient(config=config)
 
         warehouses = []
         for wh in client.warehouses.list():
@@ -191,23 +230,38 @@ async def list_warehouses(credentials: WorkspaceCredentials):
         return {"warehouses": warehouses}
     except Exception as e:
         return {"error": str(e), "warehouses": []}
+    finally:
+        # Restore env vars if they were set
+        if saved_client_id:
+            os.environ['DATABRICKS_CLIENT_ID'] = saved_client_id
+        if saved_client_secret:
+            os.environ['DATABRICKS_CLIENT_SECRET'] = saved_client_secret
 
 
 @app.post("/api/workspace/spaces")
 async def list_genie_spaces(credentials: WorkspaceCredentials):
     """List available Genie Spaces."""
+    import os
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.config import Config
+
+    # Use credentials from request (user-provided in UI)
+    host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
+
+    # CRITICAL: Explicitly clear OAuth env vars to prevent SDK from picking them up
+    # The Databricks Apps runtime sets these, but we want to use PAT auth instead
+    saved_client_id = os.environ.pop('DATABRICKS_CLIENT_ID', None)
+    saved_client_secret = os.environ.pop('DATABRICKS_CLIENT_SECRET', None)
+
     try:
-        from databricks.sdk import WorkspaceClient
-
-        # Use credentials from request (user-provided in UI)
-        host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
-
-        # If token is provided, use PAT auth. Otherwise SDK will use OAuth from env.
-        if credentials.token:
-            client = WorkspaceClient(host=host, token=credentials.token)
-        else:
-            # Use app's OAuth credentials (DATABRICKS_CLIENT_ID/SECRET from env)
-            client = WorkspaceClient(host=host)
+        # Explicitly use PAT auth with OAuth disabled
+        config = Config(
+            host=host,
+            token=credentials.token,
+            client_id="",  # Empty string to override env var
+            client_secret="",
+        )
+        client = WorkspaceClient(config=config)
 
         spaces = []
         for space in client.genie.spaces.list():
@@ -220,6 +274,12 @@ async def list_genie_spaces(credentials: WorkspaceCredentials):
         return {"spaces": spaces}
     except Exception as e:
         return {"error": str(e), "spaces": []}
+    finally:
+        # Restore env vars if they were set
+        if saved_client_id:
+            os.environ['DATABRICKS_CLIENT_ID'] = saved_client_id
+        if saved_client_secret:
+            os.environ['DATABRICKS_CLIENT_SECRET'] = saved_client_secret
 
 
 # Session management

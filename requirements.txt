@@ -2,6 +2,7 @@
 click==8.1.7
 requests==2.31.0
 pydantic==2.5.3
+databricks-sdk==0.33.0
 
 # Backend (FastAPI)
 fastapi==0.109.0
