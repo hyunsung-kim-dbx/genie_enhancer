@@ -4,13 +4,25 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ConfigureStepProps {
   state: any;
   onUpdate: (updates: any) => void;
   onNext: () => void;
   sessionId: string | null;
+}
+
+interface Warehouse {
+  id: string;
+  name: string;
+  state: string;
+}
+
+interface GenieSpace {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureStepProps) {
@@ -21,6 +33,93 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
     space_id: state.space_id || '',
     llm_endpoint: state.llm_endpoint || 'databricks-gpt-5-2',
   });
+
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [spaces, setSpaces] = useState<GenieSpace[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
+  const [error, setError] = useState('');
+
+  // Fetch default workspace config on mount
+  useEffect(() => {
+    const fetchDefaultConfig = async () => {
+      try {
+        const response = await fetch('/api/workspace/config');
+        const data = await response.json();
+        if (data.host || data.token) {
+          setConfig(prev => ({
+            ...prev,
+            host: data.host || prev.host,
+            token: data.token || prev.token,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch default config:', err);
+      }
+    };
+    fetchDefaultConfig();
+  }, []);
+
+  // Fetch warehouses and spaces when host and token are provided
+  useEffect(() => {
+    if (!config.host || !config.token) {
+      setWarehouses([]);
+      setSpaces([]);
+      return;
+    }
+
+    const fetchResources = async () => {
+      setError('');
+
+      // Fetch warehouses
+      setLoadingWarehouses(true);
+      try {
+        const whResponse = await fetch('/api/workspace/warehouses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host: config.host, token: config.token }),
+        });
+        const whData = await whResponse.json();
+        if (whData.error) {
+          setError(`Warehouses: ${whData.error}`);
+          setWarehouses([]);
+        } else {
+          setWarehouses(whData.warehouses || []);
+        }
+      } catch (err) {
+        setError(`Failed to fetch warehouses: ${err}`);
+        setWarehouses([]);
+      } finally {
+        setLoadingWarehouses(false);
+      }
+
+      // Fetch Genie spaces
+      setLoadingSpaces(true);
+      try {
+        const spaceResponse = await fetch('/api/workspace/spaces', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host: config.host, token: config.token }),
+        });
+        const spaceData = await spaceResponse.json();
+        if (spaceData.error) {
+          setError(prev => prev ? `${prev} | Spaces: ${spaceData.error}` : `Spaces: ${spaceData.error}`);
+          setSpaces([]);
+        } else {
+          setSpaces(spaceData.spaces || []);
+        }
+      } catch (err) {
+        setError(prev => prev ? `${prev} | Failed to fetch spaces: ${err}` : `Failed to fetch spaces: ${err}`);
+        setSpaces([]);
+      } finally {
+        setLoadingSpaces(false);
+      }
+    };
+
+    // Debounce the fetch to avoid too many requests
+    const timeoutId = setTimeout(fetchResources, 500);
+    return () => clearTimeout(timeoutId);
+  }, [config.host, config.token]);
 
   const handleNext = () => {
     onUpdate(config);
@@ -43,6 +142,9 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
             placeholder="https://your-workspace.cloud.databricks.com"
             className="w-full px-4 py-2 border rounded"
           />
+          {config.host && !config.host.startsWith('https://') && (
+            <p className="text-sm text-amber-600 mt-1">⚠️ Host should start with https://</p>
+          )}
         </div>
 
         <div>
@@ -56,26 +158,84 @@ export function ConfigureStep({ state, onUpdate, onNext, sessionId }: ConfigureS
           />
         </div>
 
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
         <div>
-          <label className="block text-sm font-medium mb-2">SQL Warehouse ID</label>
-          <input
-            type="text"
-            value={config.warehouse_id}
-            onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
-            placeholder="abc123..."
-            className="w-full px-4 py-2 border rounded"
-          />
+          <label className="block text-sm font-medium mb-2">SQL Warehouse</label>
+          {loadingWarehouses ? (
+            <div className="text-sm text-gray-500 py-2">Loading warehouses...</div>
+          ) : warehouses.length > 0 ? (
+            <select
+              value={config.warehouse_id}
+              onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
+              className="w-full px-4 py-2 border rounded"
+            >
+              <option value="">Select a warehouse...</option>
+              {warehouses.map((wh) => (
+                <option key={wh.id} value={wh.id}>
+                  {wh.name} ({wh.state})
+                </option>
+              ))}
+            </select>
+          ) : config.host && config.token ? (
+            <input
+              type="text"
+              value={config.warehouse_id}
+              onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
+              placeholder="Enter warehouse ID manually..."
+              className="w-full px-4 py-2 border rounded"
+            />
+          ) : (
+            <input
+              type="text"
+              value={config.warehouse_id}
+              onChange={(e) => setConfig({ ...config, warehouse_id: e.target.value })}
+              placeholder="Enter host and token first..."
+              className="w-full px-4 py-2 border rounded bg-gray-50"
+              disabled
+            />
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Genie Space ID</label>
-          <input
-            type="text"
-            value={config.space_id}
-            onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
-            placeholder="01234..."
-            className="w-full px-4 py-2 border rounded"
-          />
+          <label className="block text-sm font-medium mb-2">Genie Space</label>
+          {loadingSpaces ? (
+            <div className="text-sm text-gray-500 py-2">Loading spaces...</div>
+          ) : spaces.length > 0 ? (
+            <select
+              value={config.space_id}
+              onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
+              className="w-full px-4 py-2 border rounded"
+            >
+              <option value="">Select a space...</option>
+              {spaces.map((space) => (
+                <option key={space.id} value={space.id}>
+                  {space.name} ({space.id})
+                </option>
+              ))}
+            </select>
+          ) : config.host && config.token ? (
+            <input
+              type="text"
+              value={config.space_id}
+              onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
+              placeholder="Enter space ID manually..."
+              className="w-full px-4 py-2 border rounded"
+            />
+          ) : (
+            <input
+              type="text"
+              value={config.space_id}
+              onChange={(e) => setConfig({ ...config, space_id: e.target.value })}
+              placeholder="Enter host and token first..."
+              className="w-full px-4 py-2 border rounded bg-gray-50"
+              disabled
+            />
+          )}
         </div>
 
         <div>

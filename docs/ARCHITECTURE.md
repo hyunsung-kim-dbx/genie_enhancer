@@ -111,9 +111,6 @@ genie_enhancement.enhancement_iterations     -- Iteration details
 genie_enhancement.enhancement_changes        -- Individual changes (exploded)
 genie_enhancement.enhancement_benchmarks     -- Per-benchmark results
 genie_enhancement.enhancement_lessons_learned -- Lessons learned
-
--- Plus: Rollback history
-genie_enhancement.enhancement_rollbacks      -- Rollback actions
 ```
 
 **Why Delta-First?**
@@ -157,41 +154,6 @@ genie_enhancement.enhancement_rollbacks      -- Rollback actions
 1. **Markdown** (primary, version-controllable)
 2. **JSON** (backup, programmatic access)
 3. **Delta table** (queryable)
-
-### 4. Rollback Capability (`utils/rollback_utility.py`)
-
-**Features:**
-- List available rollback points (completed iterations only)
-- Load config snapshots from Delta table
-- Validate before rollback
-- Dry-run mode
-- Record rollback actions
-- Compare configs between iterations
-
-**Usage:**
-
-```python
-from utils.rollback_utility import RollbackUtility
-
-rollback = RollbackUtility(space_updater)
-
-# List rollback points
-points = rollback.list_rollback_points(run_id)
-
-# Rollback to iteration 3
-result = rollback.rollback(
-    space_id="01j7abc123",
-    run_id="run-uuid",
-    target_iteration=3,
-    dry_run=False
-)
-```
-
-**CLI Interface:**
-
-```bash
-python utils/rollback_utility.py <space_id> <run_id> <target_iteration>
-```
 
 ---
 
@@ -306,8 +268,6 @@ genie_enhancer/
 │   ├── space_updater.py                  # (unchanged)
 │   ├── benchmark_scorer.py               # (unchanged)
 │   └── llm_enhancer.py                   # (unchanged)
-├── utils/
-│   └── rollback_utility.py               # NEW: Rollback tool
 ├── schema/
 │   └── delta_tables_schema.sql           # NEW: Delta table DDL
 ├── lessons/
@@ -399,14 +359,6 @@ python3 run_enhancement.py dev
 ### Scenario 4: Rollback After Issue
 
 **Use:** Rollback Utility
-
-```bash
-# List rollback points
-python utils/rollback_utility.py \
-  01j7abc123 \
-  run-uuid-456 \
-  3  # Rollback to iteration 3
-```
 
 ---
 
@@ -502,7 +454,6 @@ python utils/rollback_utility.py \
 - [ ] Multi-user approval workflow
 - [ ] Config diff visualization
 - [ ] A/B testing between changes
-- [ ] Automated rollback on score regression
 
 ---
 

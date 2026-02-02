@@ -126,6 +126,71 @@ async def health_check():
     return {"status": "healthy", "service": "genie-enhancement", "version": "3.0.0"}
 
 
+# Workspace configuration
+@app.get("/api/workspace/config")
+async def get_workspace_config():
+    """Get default workspace configuration from environment variables."""
+    return {
+        "host": os.getenv("DATABRICKS_HOST", ""),
+        "token": os.getenv("DATABRICKS_TOKEN", ""),
+    }
+
+
+class WorkspaceCredentials(BaseModel):
+    """Workspace credentials for listing resources."""
+    host: str
+    token: str
+
+
+@app.post("/api/workspace/warehouses")
+async def list_warehouses(credentials: WorkspaceCredentials):
+    """List available SQL Warehouses."""
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        client = WorkspaceClient(
+            host=credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}",
+            token=credentials.token
+        )
+
+        warehouses = []
+        for wh in client.warehouses.list():
+            warehouses.append({
+                "id": wh.id,
+                "name": wh.name,
+                "state": wh.state.value if wh.state else "UNKNOWN",
+                "cluster_size": wh.cluster_size if hasattr(wh, 'cluster_size') else None
+            })
+
+        return {"warehouses": warehouses}
+    except Exception as e:
+        return {"error": str(e), "warehouses": []}
+
+
+@app.post("/api/workspace/spaces")
+async def list_genie_spaces(credentials: WorkspaceCredentials):
+    """List available Genie Spaces."""
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        client = WorkspaceClient(
+            host=credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}",
+            token=credentials.token
+        )
+
+        spaces = []
+        for space in client.genie.spaces.list():
+            spaces.append({
+                "id": space.space_id,
+                "name": space.name,
+                "description": space.description if hasattr(space, 'description') else None
+            })
+
+        return {"spaces": spaces}
+    except Exception as e:
+        return {"error": str(e), "spaces": []}
+
+
 # Session management
 @app.post("/api/sessions/create")
 async def create_session(user: dict = Depends(get_current_user)):
