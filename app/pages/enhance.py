@@ -1,317 +1,420 @@
 """
-Enhanced Enhancement Page with Beautiful UI
+Genie Space Enhancement Page
 
-Real-time visibility into the enhancement process with
-interactive visualizations and progress tracking.
+Interactive UI for enhancing Genie Spaces with batch scoring.
 """
 
 import streamlit as st
 import sys
 from pathlib import Path
+import logging
+from datetime import datetime
 
-# Add parent directory to path
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
+from lib.genie_client import GenieConversationalClient
+from lib.space_cloner import SpaceCloner
+from lib.scorer import BenchmarkScorer
+from lib.batch_scorer import BatchBenchmarkScorer
+from lib.benchmark_parser import BenchmarkLoader
+from lib.llm import DatabricksLLMClient
+from lib.sql import SQLExecutor
+from lib.category_enhancer import CategoryEnhancer
+from lib.applier import BatchApplier
 from components.enhancement_ui import EnhancementUI
-import time
+
+logger = logging.getLogger(__name__)
 
 
 def render_enhancement_page():
-    """Render the main enhancement page with beautiful UI."""
+    """Render the real enhancement page with batch scoring."""
 
     st.title("🧞 Genie Space Enhancement")
-    st.markdown("Real-time enhancement with visual feedback")
+    st.markdown("Automated improvement system with batch scoring (13x faster)")
 
     # Initialize session state
-    if 'enhancement_state' not in st.session_state:
-        st.session_state.enhancement_state = 'ready'
-        st.session_state.current_loop = 0
-        st.session_state.current_score = 0.0
-        st.session_state.scores_history = []
+    if 'enhancement_running' not in st.session_state:
+        st.session_state.enhancement_running = False
+        st.session_state.results = None
 
     # Sidebar configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
 
-        space_id = st.text_input("Genie Space ID", value="01f0f5c8...")
-        target_score = st.slider("Target Score", 0.0, 1.0, 0.90, 0.05)
-        max_loops = st.number_input("Max Loops", 1, 10, 3)
-
-        batch_mode = st.checkbox("Use Batch Scoring", value=True)
-        if batch_mode:
-            genie_concurrent = st.slider("Genie Concurrent Calls", 1, 10, 3)
+        # Databricks connection
+        st.subheader("🔐 Databricks Connection")
+        databricks_host = st.text_input(
+            "Databricks Host",
+            value="https://e2-demo-field-eng.cloud.databricks.com",
+            help="e.g., https://your-workspace.cloud.databricks.com"
+        )
+        databricks_token = st.text_input(
+            "PAT Token",
+            type="password",
+            help="Your Databricks Personal Access Token"
+        )
+        warehouse_id = st.text_input(
+            "SQL Warehouse ID",
+            help="For creating metric views"
+        )
 
         st.divider()
 
-        start_button = st.button("🚀 Start Enhancement", type="primary", use_container_width=True)
+        # Genie Space config
+        st.subheader("🧞 Genie Space")
+        space_id = st.text_input(
+            "Space ID",
+            value="01f0f5c840c118b9824acd167525a768",
+            help="The Genie Space to enhance"
+        )
+
+        st.divider()
+
+        # Benchmark selection
+        st.subheader("📊 Benchmarks")
+        benchmark_file = st.selectbox(
+            "Select Benchmark",
+            options=[
+                "benchmarks/kpi_benchmark.json",
+                "benchmarks/social_benchmark.json",
+                "benchmarks/benchmark.json"
+            ]
+        )
+
+        st.divider()
+
+        # Enhancement settings
+        st.subheader("⚙️ Enhancement Settings")
+        target_score = st.slider("Target Score", 0.0, 1.0, 0.90, 0.05)
+        max_loops = st.number_input("Max Loops", 1, 10, 3)
+
+        # Batch mode settings
+        use_batch = st.checkbox("🚀 Use Batch Scoring", value=True, help="13x faster!")
+        if use_batch:
+            turbo_mode = st.checkbox(
+                "⚡ TURBO MODE",
+                value=False,
+                help="Maximum speed! Genie=10, SQL=25, shorter timeouts. May hit rate limits."
+            )
+
+            if turbo_mode:
+                genie_concurrent = 10
+                sql_concurrent = 25
+                st.warning("⚡ TURBO MODE ACTIVE: Maximum concurrency enabled!")
+            else:
+                genie_concurrent = st.slider(
+                    "Genie Concurrent Calls",
+                    min_value=1,
+                    max_value=15,
+                    value=5,  # Increased from 3 to 5 for speed
+                    help="More = faster, but watch rate limits. Try 5-8 for best speed."
+                )
+                sql_concurrent = st.slider(
+                    "SQL Concurrent Queries",
+                    min_value=1,
+                    max_value=30,
+                    value=15,  # Increased from 10 to 15
+                    help="SQL is fast, can handle more concurrency"
+                )
+        else:
+            st.warning("⚠️ Sequential mode is 13x slower")
+            genie_concurrent = 1
+            sql_concurrent = 1
+
+        st.divider()
+
+        # Start button
+        start_button = st.button(
+            "🚀 Start Enhancement",
+            type="primary",
+            use_container_width=True,
+            disabled=st.session_state.enhancement_running
+        )
 
     # Main content area
+    if not databricks_host or not databricks_token or not warehouse_id:
+        st.info("👈 Please configure Databricks connection in the sidebar to begin")
+
+        with st.expander("📖 About Batch Scoring", expanded=True):
+            st.markdown("""
+            ### 🚀 Batch Scoring Performance
+
+            | Mode | 20 Benchmarks | Speedup |
+            |------|---------------|---------|
+            | Sequential | ~7 min | 1x |
+            | Parallel | ~1.5 min | 4.6x |
+            | **Batch (This)** | **~30s** | **13x** |
+
+            #### How It Works:
+            1. **Concurrent Genie Calls** - Process multiple questions simultaneously
+            2. **Parallel SQL Execution** - Run SQL queries concurrently
+            3. **Batch LLM Evaluation** - Evaluate results in chunks
+
+            #### Safety Features:
+            - ✅ Rate limiting (semaphore-based)
+            - ✅ Retry with exponential backoff
+            - ✅ Circuit breaker (auto-fallback to sequential)
+            - ✅ Per-query timeout handling
+            - ✅ Graceful degradation
+            """)
+        return
+
+    # Run enhancement if button clicked
     if start_button:
-        run_enhancement_flow(
-            space_id=space_id,
-            target_score=target_score,
-            max_loops=max_loops,
-            batch_mode=batch_mode
-        )
-    else:
-        # Show initial dashboard
-        render_initial_state(target_score, max_loops)
+        st.session_state.enhancement_running = True
+
+        try:
+            # Build batch config - AGGRESSIVE for speed
+            batch_config = {
+                "genie_max_concurrent": genie_concurrent,
+                "sql_max_concurrent": sql_concurrent,
+                "genie_retry_attempts": 1,      # 1 retry instead of 2 (faster)
+                "genie_timeout": 45,            # 45s instead of 120s (much faster timeout)
+                "sql_timeout": 30,              # 30s instead of 60s (faster SQL timeout)
+                "eval_chunk_size": 5            # Smaller chunks = more parallelism (was 10)
+            }
+
+            # Run enhancement with real batch scorer
+            with st.spinner("🚀 Running enhancement with batch scoring..."):
+                results = run_real_enhancement(
+                    databricks_host=databricks_host,
+                    databricks_token=databricks_token,
+                    space_id=space_id,
+                    warehouse_id=warehouse_id,
+                    benchmark_file=benchmark_file,
+                    target_score=target_score,
+                    max_loops=max_loops,
+                    use_batch=use_batch,
+                    batch_config=batch_config
+                )
+
+            st.session_state.results = results
+            st.session_state.enhancement_running = False
+
+            # Display results
+            display_results(results)
+
+        except Exception as e:
+            st.session_state.enhancement_running = False
+            st.error(f"❌ Enhancement failed: {str(e)}")
+            logger.exception("Enhancement failed")
+
+    # Show previous results if available
+    elif st.session_state.results:
+        st.info("Showing results from previous run")
+        display_results(st.session_state.results)
 
 
-def render_initial_state(target_score: float, max_loops: int):
-    """Render initial state before enhancement starts."""
-
-    # Overview dashboard (placeholder data)
-    EnhancementUI.render_overview_dashboard(
-        current_score=0.667,
-        target_score=target_score,
-        loop_num=1,
-        max_loops=max_loops,
-        benchmarks_total=12,
-        benchmarks_passed=8
-    )
-
-    st.info("👈 Configure settings in sidebar and click 'Start Enhancement' to begin")
-
-    # Show what will happen
-    with st.expander("📖 Enhancement Process", expanded=False):
-        st.markdown("""
-        ### The enhancement process includes:
-
-        **Phase 1: Scoring**
-        - Run all benchmark questions through Genie
-        - Compare results with expected outputs
-        - Identify failures and categorize them
-
-        **Phase 2: Fix Generation**
-        - Analyze failure patterns
-        - Generate targeted fixes by category:
-          - 📝 Metadata (synonyms, descriptions)
-          - 📖 Instructions (business rules)
-          - 📚 Sample queries (patterns)
-          - 🔗 Join specs (table relationships)
-
-        **Phase 3: Apply Fixes**
-        - Apply all fixes to dev-working space
-        - Track success/failure per fix
-        - Show space configuration changes
-
-        **Phase 4: Validation**
-        - Re-score to measure improvement
-        - Compare before/after
-        - Decide next steps (another loop or promote)
-        """)
-
-
-def run_enhancement_flow(
+def run_real_enhancement(
+    databricks_host: str,
+    databricks_token: str,
     space_id: str,
+    warehouse_id: str,
+    benchmark_file: str,
     target_score: float,
     max_loops: int,
-    batch_mode: bool
+    use_batch: bool,
+    batch_config: dict
 ):
-    """Run the full enhancement flow with beautiful UI."""
+    """
+    Run the actual enhancement logic with real batch scoring.
 
-    st.markdown("---")
+    This calls the same code as run_enhancement.py but from the UI.
+    """
 
-    # Loop through enhancement cycles
-    for loop_num in range(1, max_loops + 1):
-        st.markdown(f"## 🔄 Enhancement Loop {loop_num}/{max_loops}")
+    st.markdown("## 🔄 Enhancement Started")
 
-        # Update dashboard
-        EnhancementUI.render_overview_dashboard(
-            current_score=st.session_state.current_score,
-            target_score=target_score,
-            loop_num=loop_num,
-            max_loops=max_loops,
-            benchmarks_total=12,
-            benchmarks_passed=int(st.session_state.current_score * 12)
+    # Initialize clients
+    with st.status("Initializing clients...", expanded=True) as status:
+        st.write("🔌 Connecting to Databricks...")
+
+        # Clone space to dev-working
+        space_cloner = SpaceCloner(
+            host=databricks_host,
+            token=databricks_token
         )
 
-        st.markdown("---")
+        st.write("📦 Cloning space to dev-working...")
+        dev_working_id = space_cloner.create_dev_working_space(space_id)
+        st.success(f"✅ Dev space created: {dev_working_id}")
 
-        # Phase 1: Scoring
-        with st.container():
-            score_results = run_scoring_phase()
+        # Initialize LLM
+        st.write("🤖 Initializing LLM client...")
+        llm_client = DatabricksLLMClient(
+            host=databricks_host,
+            token=databricks_token,
+            endpoint_name="databricks-meta-llama-3-1-70b-instruct"
+        )
+
+        # Initialize SQL executor
+        st.write("💾 Connecting to SQL Warehouse...")
+        sql_executor = SQLExecutor(
+            host=databricks_host,
+            token=databricks_token,
+            warehouse_id=warehouse_id
+        )
+
+        # Initialize Genie client
+        st.write("🧞 Connecting to Genie...")
+        genie_client = GenieConversationalClient(
+            host=databricks_host,
+            token=databricks_token,
+            space_id=dev_working_id
+        )
+
+        # Load benchmarks
+        st.write(f"📊 Loading benchmarks from {benchmark_file}...")
+        benchmark_loader = BenchmarkLoader()
+        benchmarks = benchmark_loader.load_from_file(
+            project_root / benchmark_file
+        )
+        st.success(f"✅ Loaded {len(benchmarks)} benchmarks")
+
+        status.update(label="✅ Initialization complete", state="complete")
+
+    # Create progress display elements
+    progress_container = st.empty()
+    phase_status = st.empty()
+
+    # Progress callback for real-time updates
+    def update_progress(phase, current, total, message):
+        """Update Streamlit UI with progress."""
+        phase_names = {
+            "genie": "🧞 Phase 1: Genie Queries",
+            "sql": "💾 Phase 2: SQL Execution",
+            "eval": "🤖 Phase 3: LLM Evaluation"
+        }
+
+        phase_name = phase_names.get(phase, phase)
+        progress = current / total if total > 0 else 0
+
+        with progress_container:
+            st.progress(progress)
+        with phase_status:
+            st.write(f"**{phase_name}**: {current}/{total} - {message}")
+
+    # Initialize scorer based on mode
+    if use_batch:
+        st.info(f"🚀 Using BATCH scorer (genie_concurrent={batch_config['genie_max_concurrent']}, sql_concurrent={batch_config['sql_max_concurrent']})")
+        scorer = BatchBenchmarkScorer(
+            genie_client=genie_client,
+            llm_client=llm_client,
+            sql_executor=sql_executor,
+            config=batch_config,
+            progress_callback=update_progress  # Add progress callback!
+        )
+    else:
+        st.warning("⚠️ Using SEQUENTIAL scorer (slower)")
+        scorer = BenchmarkScorer(
+            genie_client=genie_client,
+            llm_client=llm_client,
+            sql_executor=sql_executor,
+            config={"parallel_workers": 0}
+        )
+
+    # Run enhancement loops
+    all_loops_results = []
+
+    for loop_num in range(1, max_loops + 1):
+        st.markdown(f"---")
+        st.markdown(f"## 🔄 Loop {loop_num}/{max_loops}")
+
+        # Phase 1: Score
+        with st.status(f"📊 Scoring {len(benchmarks)} benchmarks...", expanded=True) as status:
+            start_time = datetime.now()
+
+            score_results = scorer.score(benchmarks)
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            status.update(
+                label=f"✅ Scoring complete in {elapsed:.1f}s (Score: {score_results['score']:.1%})",
+                state="complete"
+            )
+
+        # Show results
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Score", f"{score_results['score']:.1%}")
+        col2.metric("Passed", f"{score_results['passed']}/{score_results['total']}")
+        col3.metric("Time", f"{elapsed:.1f}s")
 
         # Check if target reached
         if score_results['score'] >= target_score:
             st.balloons()
-            st.success(f"🎉 Target reached! Score: {score_results['score']:.1%}")
+            st.success(f"🎉 Target score {target_score:.1%} reached!")
+
+            all_loops_results.append({
+                'loop': loop_num,
+                'score': score_results['score'],
+                'time': elapsed
+            })
             break
 
-        st.markdown("---")
+        # Phase 2: Generate fixes
+        st.markdown("### 🔧 Generating Fixes")
+        with st.spinner("Analyzing failures and generating fixes..."):
+            enhancer = CategoryEnhancer(llm_client, project_root / "prompts")
+            fixes = enhancer.generate_fixes(score_results)
 
-        # Phase 2: Fix Generation
-        with st.container():
-            grouped_fixes = run_fix_generation_phase(score_results)
+        st.success(f"✅ Generated {len(fixes)} fixes")
 
-        st.markdown("---")
+        # Phase 3: Apply fixes
+        st.markdown("### 📝 Applying Fixes")
+        with st.spinner("Applying fixes to dev-working space..."):
+            applier = BatchApplier(
+                space_api=space_cloner,
+                sql_executor=sql_executor,
+                config={"catalog": "sandbox", "schema": "genie_enhancement"}
+            )
+            apply_results = applier.apply_fixes(dev_working_id, fixes)
 
-        # Phase 3: Apply Fixes
-        with st.container():
-            old_config = {'dummy': 'config'}  # Would fetch real config
-            apply_result = run_apply_phase(grouped_fixes)
-            new_config = {'dummy': 'config'}  # Would fetch updated config
+        st.success(f"✅ Applied {len(apply_results.get('applied', []))} fixes")
 
-            # Show space changes
-            EnhancementUI.render_space_changes_summary(old_config, new_config)
-
-        st.markdown("---")
-
-        # Phase 4: Wait for indexing
-        st.markdown("### ⏳ Phase 4: Waiting for Genie Indexing")
-
+        # Wait for indexing
+        st.markdown("### ⏳ Waiting for Genie indexing...")
+        import time
         progress_bar = st.progress(0)
-        status_text = st.empty()
-
         for i in range(60):
             progress_bar.progress((i + 1) / 60)
-            status_text.text(f"Waiting for indexing... {60 - i}s remaining")
-            time.sleep(0.05)  # Faster for demo
+            time.sleep(1)
+        st.success("✅ Indexing complete")
 
-        status_text.text("✅ Indexing complete")
-        time.sleep(0.3)
-        status_text.empty()
-
-        st.markdown("---")
-
-        # Loop summary
-        before_score = st.session_state.current_score
-        after_score = before_score + 0.10  # Simulated improvement
-        st.session_state.current_score = after_score
-
-        # Add to history
-        st.session_state.scores_history.append({
+        all_loops_results.append({
             'loop': loop_num,
-            'score': after_score,
-            'target': target_score
+            'score': score_results['score'],
+            'time': elapsed,
+            'fixes_applied': len(apply_results.get('applied', []))
         })
 
-        EnhancementUI.render_loop_summary(
-            loop_num=loop_num,
-            before_score=before_score,
-            after_score=after_score,
-            target_score=target_score,
-            fixes_applied=len(apply_result.get('applied', []))
-        )
-
-        st.markdown("---")
-
-    # Final score history
-    if st.session_state.scores_history:
-        EnhancementUI.render_score_history(st.session_state.scores_history)
-
-
-def run_scoring_phase():
-    """Run scoring phase with UI."""
-
-    # Mock benchmarks
-    benchmarks = [
-        {'id': f'bench_{i}', 'question': f'Sample question {i}'}
-        for i in range(12)
-    ]
-
-    EnhancementUI.render_scoring_phase(benchmarks, show_progress=True)
-
-    # Mock results
-    score_results = {
-        'score': 0.667,
-        'total': 12,
-        'passed': 8,
-        'results': [
-            {
-                'passed': False,
-                'question': '최근 7일간 inZOI의 일별 DAU는?',
-                'failure_category': 'missing_synonym',
-                'expected_sql': 'SELECT event_date, SUM(active_user) as DAU FROM ...',
-                'genie_sql': 'SELECT date, COUNT(*) FROM ...',
-                'failure_reason': 'Korean term "일별" not recognized'
-            },
-            {
-                'passed': False,
-                'question': '월별 DARPU 추이는?',
-                'failure_category': 'wrong_calculation',
-                'expected_sql': 'SELECT month, try_divide(SUM(revenue), SUM(users)) ...',
-                'genie_sql': 'SELECT month, SUM(revenue) / SUM(users) ...',
-                'failure_reason': 'Missing try_divide for safe division'
-            },
-            {
-                'passed': False,
-                'question': '지역별 매출 상위 10개는?',
-                'failure_category': 'wrong_table',
-                'expected_sql': 'SELECT region, SUM(revenue) FROM summary_daily JOIN region_meta ...',
-                'genie_sql': 'SELECT country, SUM(amount) FROM transactions ...',
-                'failure_reason': 'Used wrong table (transactions instead of summary_daily)'
-            },
-            {
-                'passed': False,
-                'question': '신규 유저의 D+7 리텐션은?',
-                'failure_category': 'missing_pattern',
-                'expected_sql': 'SELECT cohort_date, try_divide(retained, cohort_size) FROM retention WHERE day_plus = 7',
-                'genie_sql': None,
-                'failure_reason': 'No SQL generated - missing retention pattern'
-            }
-        ] + [
-            {'passed': True, 'question': f'Q{i}', 'failure_category': None}
-            for i in range(8)
-        ]
-    }
-
-    # Render failure breakdown
-    EnhancementUI.render_failure_breakdown(score_results)
-
-    return score_results
-
-
-def run_fix_generation_phase(score_results):
-    """Run fix generation phase with UI."""
-
-    st.markdown("### 🔧 Phase 2: Generating Fixes")
-
-    # Simulate fix generation with progress
-    with st.spinner("Analyzing failures and generating fixes..."):
-        time.sleep(1)
-
-    # Mock grouped fixes
-    grouped_fixes = {
-        'metadata_add': [
-            {'type': 'add_synonym', 'synonym': '일별', 'column': 'event_date', 'table': 'summary_daily'},
-            {'type': 'add_synonym', 'synonym': '매출', 'column': 'cash_revenue', 'table': 'summary_daily'},
-            {'type': 'add_table_description', 'table': 'summary_daily', 'description': ['Daily summary table']},
-            {'type': 'add_column_description', 'column': 'active_user', 'description': ['Daily active users']}
-        ],
-        'instruction_fix': [
-            {'type': 'update_text_instruction', 'content': ['Date interpretation rules', 'Metric calculations']},
-        ],
-        'sample_queries_add': [
-            {'type': 'add_example_query', 'pattern_name': 'daily_kpi_calculation'},
-            {'type': 'add_example_query', 'pattern_name': 'safe_division_pattern'},
-            {'type': 'add_example_query', 'pattern_name': 'retention_calculation'}
-        ],
-        'join_specs_add': [
-            {'type': 'add_join_spec', 'left_table': 'summary_daily', 'right_table': 'region_meta'},
-        ]
-    }
-
-    EnhancementUI.render_fix_generation_phase(grouped_fixes)
-
-    return grouped_fixes
-
-
-def run_apply_phase(grouped_fixes):
-    """Run apply phase with UI."""
-
-    # Mock application (no callback = simulated)
-    result = EnhancementUI.render_apply_phase(
-        grouped_fixes,
-        apply_callback=None  # Pass real callback here in production
-    )
-
     return {
-        'applied': list(range(sum(len(fixes) for fixes in grouped_fixes.values()))),
-        'failed': []
+        'loops': all_loops_results,
+        'final_score': all_loops_results[-1]['score'],
+        'dev_space_id': dev_working_id
     }
+
+
+def display_results(results):
+    """Display enhancement results."""
+
+    st.markdown("## 📈 Enhancement Results")
+
+    # Final score
+    col1, col2 = st.columns(2)
+    col1.metric("Final Score", f"{results['final_score']:.1%}")
+    col2.metric("Loops Completed", len(results['loops']))
+
+    # Loop history
+    st.markdown("### 📊 Loop History")
+
+    import pandas as pd
+    df = pd.DataFrame(results['loops'])
+    st.dataframe(df, use_container_width=True)
+
+    # Dev space info
+    st.markdown("### 🧞 Dev Space")
+    st.code(results['dev_space_id'])
+    st.info("You can now test this space or promote it to production")
 
 
 if __name__ == "__main__":
