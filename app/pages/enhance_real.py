@@ -94,19 +94,31 @@ def render_enhancement_page():
         # Batch mode settings
         use_batch = st.checkbox("🚀 Use Batch Scoring", value=True, help="13x faster!")
         if use_batch:
-            genie_concurrent = st.slider(
-                "Genie Concurrent Calls",
-                min_value=1,
-                max_value=10,
-                value=3,
-                help="More = faster, but watch rate limits"
+            turbo_mode = st.checkbox(
+                "⚡ TURBO MODE",
+                value=False,
+                help="Maximum speed! Genie=10, SQL=25, shorter timeouts. May hit rate limits."
             )
-            sql_concurrent = st.slider(
-                "SQL Concurrent Queries",
-                min_value=1,
-                max_value=20,
-                value=10
-            )
+
+            if turbo_mode:
+                genie_concurrent = 10
+                sql_concurrent = 25
+                st.warning("⚡ TURBO MODE ACTIVE: Maximum concurrency enabled!")
+            else:
+                genie_concurrent = st.slider(
+                    "Genie Concurrent Calls",
+                    min_value=1,
+                    max_value=15,
+                    value=5,  # Increased from 3 to 5 for speed
+                    help="More = faster, but watch rate limits. Try 5-8 for best speed."
+                )
+                sql_concurrent = st.slider(
+                    "SQL Concurrent Queries",
+                    min_value=1,
+                    max_value=30,
+                    value=15,  # Increased from 10 to 15
+                    help="SQL is fast, can handle more concurrency"
+                )
         else:
             st.warning("⚠️ Sequential mode is 13x slower")
             genie_concurrent = 1
@@ -155,14 +167,14 @@ def render_enhancement_page():
         st.session_state.enhancement_running = True
 
         try:
-            # Build batch config
+            # Build batch config - AGGRESSIVE for speed
             batch_config = {
                 "genie_max_concurrent": genie_concurrent,
                 "sql_max_concurrent": sql_concurrent,
-                "genie_retry_attempts": 2,
-                "genie_timeout": 120,
-                "sql_timeout": 60,
-                "eval_chunk_size": 10
+                "genie_retry_attempts": 1,      # 1 retry instead of 2 (faster)
+                "genie_timeout": 45,            # 45s instead of 120s (much faster timeout)
+                "sql_timeout": 30,              # 30s instead of 60s (faster SQL timeout)
+                "eval_chunk_size": 5            # Smaller chunks = more parallelism (was 10)
             }
 
             # Run enhancement with real batch scorer
