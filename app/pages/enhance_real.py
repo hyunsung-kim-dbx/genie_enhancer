@@ -275,6 +275,27 @@ def run_real_enhancement(
 
         status.update(label="✅ Initialization complete", state="complete")
 
+    # Create progress display elements
+    progress_container = st.empty()
+    phase_status = st.empty()
+
+    # Progress callback for real-time updates
+    def update_progress(phase, current, total, message):
+        """Update Streamlit UI with progress."""
+        phase_names = {
+            "genie": "🧞 Phase 1: Genie Queries",
+            "sql": "💾 Phase 2: SQL Execution",
+            "eval": "🤖 Phase 3: LLM Evaluation"
+        }
+
+        phase_name = phase_names.get(phase, phase)
+        progress = current / total if total > 0 else 0
+
+        with progress_container:
+            st.progress(progress)
+        with phase_status:
+            st.write(f"**{phase_name}**: {current}/{total} - {message}")
+
     # Initialize scorer based on mode
     if use_batch:
         st.info(f"🚀 Using BATCH scorer (genie_concurrent={batch_config['genie_max_concurrent']}, sql_concurrent={batch_config['sql_max_concurrent']})")
@@ -282,7 +303,8 @@ def run_real_enhancement(
             genie_client=genie_client,
             llm_client=llm_client,
             sql_executor=sql_executor,
-            config=batch_config
+            config=batch_config,
+            progress_callback=update_progress  # Add progress callback!
         )
     else:
         st.warning("⚠️ Using SEQUENTIAL scorer (slower)")

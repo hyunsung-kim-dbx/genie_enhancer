@@ -37,7 +37,8 @@ class BatchBenchmarkScorer:
         genie_client,
         llm_client,
         sql_executor: SQLExecutor,
-        config: Optional[Dict] = None
+        config: Optional[Dict] = None,
+        progress_callback=None
     ):
         """
         Initialize batch scorer.
@@ -48,6 +49,7 @@ class BatchBenchmarkScorer:
             sql_executor: SQL executor
             config: Configuration dict:
                 # Genie batch config
+            progress_callback: Optional callback(phase, current, total, message)
                 - genie_max_concurrent: Max concurrent Genie calls (default: 3)
                 - genie_retry_attempts: Retry attempts per query (default: 2)
                 - genie_timeout: Timeout per query (default: 120)
@@ -66,6 +68,7 @@ class BatchBenchmarkScorer:
         self.sql_executor = sql_executor
         self.config = config or {}
         self.prompt_loader = PromptLoader()
+        self.progress_callback = progress_callback
 
         # Initialize batch Genie client with safety measures
         genie_config = {
@@ -147,6 +150,9 @@ class BatchBenchmarkScorer:
         logger.info("PHASE 1: Batch Genie Queries")
         logger.info(f"{'='*60}")
 
+        if self.progress_callback:
+            self.progress_callback("genie", 0, total, "Starting Genie queries...")
+
         phase1_start = time.time()
         genie_responses = await self.batch_genie.batch_ask(benchmarks)
         phase1_duration = time.time() - phase1_start
@@ -155,12 +161,18 @@ class BatchBenchmarkScorer:
         logger.info(f"Phase 1 complete: {genie_success}/{total} Genie calls succeeded "
                    f"in {phase1_duration:.1f}s")
 
+        if self.progress_callback:
+            self.progress_callback("genie", total, total, f"Genie queries complete ({phase1_duration:.1f}s)")
+
         # =====================================================================
         # PHASE 2: Batch SQL Execution
         # =====================================================================
         logger.info(f"\n{'='*60}")
         logger.info("PHASE 2: Batch SQL Execution")
         logger.info(f"{'='*60}")
+
+        if self.progress_callback:
+            self.progress_callback("sql", 0, total, "Starting SQL execution...")
 
         phase2_start = time.time()
         sql_results = await self._batch_execute_sql(benchmarks, genie_responses)
@@ -170,12 +182,18 @@ class BatchBenchmarkScorer:
         logger.info(f"Phase 2 complete: {sql_success}/{total} SQL executions succeeded "
                    f"in {phase2_duration:.1f}s")
 
+        if self.progress_callback:
+            self.progress_callback("sql", total, total, f"SQL execution complete ({phase2_duration:.1f}s)")
+
         # =====================================================================
         # PHASE 3: Batch LLM Evaluation
         # =====================================================================
         logger.info(f"\n{'='*60}")
         logger.info("PHASE 3: Batch LLM Evaluation")
         logger.info(f"{'='*60}")
+
+        if self.progress_callback:
+            self.progress_callback("eval", 0, total, "Starting LLM evaluation...")
 
         phase3_start = time.time()
         evaluations = await self._batch_evaluate(sql_results)
@@ -184,6 +202,9 @@ class BatchBenchmarkScorer:
         eval_success = sum(1 for e in evaluations if e["passed"])
         logger.info(f"Phase 3 complete: {eval_success}/{total} evaluations passed "
                    f"in {phase3_duration:.1f}s")
+
+        if self.progress_callback:
+            self.progress_callback("eval", total, total, f"LLM evaluation complete ({phase3_duration:.1f}s)")
 
         return evaluations
 
