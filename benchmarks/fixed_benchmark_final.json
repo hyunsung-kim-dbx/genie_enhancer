@@ -13,6 +13,7 @@
     "korean_question": "inZOI 게임의 디스코드에서 2025년 8월 25일에 가장 핫한 토픽(시간대별 반응이 많은 채널)은 무엇인가요?",
     "expected_sql": "WITH hot_messages AS (\n  SELECT \n    m.message_id,\n    m.created_at,\n    m.channel_id,\n    c.channel_name,\n    COALESCE(SUM(r.count), 0) as reaction_count,\n    DATE_TRUNC('hour', m.created_at) as hour_bucket\n  FROM sandbox.agent_poc.message m\n  LEFT JOIN sandbox.agent_poc.reaction r ON m.message_id = r.message_id\n  LEFT JOIN sandbox.agent_poc.channel_list c ON m.channel_id = c.channel_id\n  WHERE m.game_code = 'inzoi'\n    AND m.event_date = DATE '2025-08-25'\n  GROUP BY m.message_id, m.created_at, m.channel_id, c.channel_name\n),\nchannel_hourly_stats AS (\n  SELECT \n    hour_bucket,\n    channel_name,\n    COUNT(*) as message_count,\n    SUM(reaction_count) as total_reactions,\n    AVG(reaction_count) as avg_reactions,\n    MAX(reaction_count) as max_reactions\n  FROM hot_messages\n  GROUP BY hour_bucket, channel_name\n)\nSELECT \n  hour_bucket,\n  channel_name,\n  message_count,\n  total_reactions,\n  ROUND(avg_reactions, 2) as avg_reactions,\n  max_reactions\nFROM channel_hourly_stats\nORDER BY total_reactions DESC\nLIMIT 10;",
     "category": "social_analytics",
+    "difficulty": "medium"
   },
   {
     "id": "social_analytics_006",
