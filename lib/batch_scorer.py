@@ -337,16 +337,34 @@ class BatchBenchmarkScorer:
             for i in range(0, len(sql_results), self.eval_chunk_size)
         ]
 
-        logger.info(f"Evaluating in {len(chunks)} chunks of {self.eval_chunk_size}")
+        logger.info(f"Evaluating in {len(chunks)} chunks of {self.eval_chunk_size} (PARALLEL)")
 
+        # Evaluate all chunks in parallel
+        chunk_tasks = [
+            self._evaluate_chunk(chunk)
+            for chunk in chunks
+        ]
+
+        # Run all chunk evaluations concurrently
+        chunk_results = await asyncio.gather(*chunk_tasks, return_exceptions=True)
+
+        # Flatten results
         all_evaluations = []
-
-        for chunk_idx, chunk in enumerate(chunks):
-            logger.info(f"Evaluating chunk {chunk_idx + 1}/{len(chunks)}...")
-
-            # Evaluate chunk
-            chunk_evals = await self._evaluate_chunk(chunk)
-            all_evaluations.extend(chunk_evals)
+        for i, result in enumerate(chunk_results):
+            if isinstance(result, Exception):
+                logger.error(f"Chunk {i+1} evaluation error: {result}")
+                # Fallback: mark all as failed
+                all_evaluations.extend([
+                    {
+                        "benchmark_id": r.get("benchmark_id"),
+                        "question": r.get("question"),
+                        "passed": False,
+                        "reason": f"Evaluation error: {str(result)}"
+                    }
+                    for r in chunks[i]
+                ])
+            else:
+                all_evaluations.extend(result)
 
         return all_evaluations
 
@@ -425,31 +443,51 @@ class BatchBenchmarkScorer:
 """
             result_blocks.append(block)
 
-        # Build final prompt
+        # Build final prompt - override the base prompt format for batch processing
         prompt = f"""
-{base_prompt}
+You are evaluating Genie Space answers in BATCH mode.
 
-Evaluate these {len(chunk)} question/result pairs in BATCH.
-
-Return a JSON array with {len(chunk)} objects, one per result in order:
-
-```json
-[
-  {{
-    "benchmark_id": "...",
-    "passed": true/false,
-    "failure_reason": "..." or null,
-    "failure_category": "..." or null
-  }},
-  ...
-]
-```
+For each result, compare the expected answer with Genie's answer using these rules:
+- Focus on DATA RESULTS when available (preferred)
+- Fall back to SQL comparison only if data execution failed
+- Be lenient - PASS if semantically equivalent
+- Row count differences are OK if core data matches
 
 **Results to Evaluate:**
 
 {"".join(result_blocks)}
 
-Return ONLY the JSON array, no other text.
+Return a JSON array with {len(chunk)} evaluation objects, one per result IN THE SAME ORDER:
+
+```json
+[
+  {{
+    "benchmark_id": "bench_1",
+    "passed": true,
+    "failure_reason": "Brief explanation if failed, or null if passed",
+    "failure_category": "wrong_table" | "wrong_calculation" | "missing_synonym" | "missing_pattern" | "wrong_filter" | null
+  }},
+  {{
+    "benchmark_id": "bench_2",
+    "passed": false,
+    "failure_reason": "Specific reason why it failed",
+    "failure_category": "wrong_calculation"
+  }}
+]
+```
+
+**Failure Categories:**
+- `wrong_table`: Used incorrect table
+- `wrong_calculation`: Wrong aggregation (SUM vs COUNT, etc.)
+- `missing_synonym`: Term not recognized
+- `missing_pattern`: Query pattern not understood
+- `wrong_filter`: Incorrect WHERE/date filtering
+
+**IMPORTANT:**
+- Use `failure_reason` (not `reasoning`)
+- Include `benchmark_id` to match results
+- Return ONLY the JSON array, no other text
+- Order must match the input order
 """
         return prompt
 

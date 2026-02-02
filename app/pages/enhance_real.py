@@ -292,7 +292,7 @@ def run_real_enhancement(
         with st.status(f"📊 Scoring {len(benchmarks)} benchmarks...", expanded=True) as status:
             start_time = datetime.now()
 
-            score_results = scorer.score_benchmarks(benchmarks)
+            score_results = scorer.score(benchmarks)
 
             elapsed = (datetime.now() - start_time).total_seconds()
             status.update(
