@@ -1,32 +1,29 @@
 """
-Genie Space Enhancement System
-
-Single-page Streamlit app for enhancing Genie Spaces with batch scoring.
+Genie Space Enhancement System - Professional UI
 """
 
 import streamlit as st
 import sys
+import json
+import tempfile
 from pathlib import Path
 import logging
 from datetime import datetime
 
-# Add lib directory to path
+# Setup
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from lib.genie_client import GenieConversationalClient
 from lib.space_cloner import SpaceCloner
-from lib.scorer import BenchmarkScorer
 from lib.batch_scorer import BatchBenchmarkScorer
 from lib.benchmark_parser import BenchmarkLoader
 from lib.llm import DatabricksLLMClient
 from lib.sql import SQLExecutor
-from lib.category_enhancer import CategoryEnhancer
-from lib.applier import BatchApplier
 
 logger = logging.getLogger(__name__)
 
-# Configure page
+# Page config
 st.set_page_config(
     page_title="Genie Space Enhancement",
     page_icon="🧞",
@@ -34,250 +31,231 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Main title
-st.title("🧞 Genie Space Enhancement")
-st.markdown("Automated improvement system with batch scoring (13x faster)")
-
-# Initialize session state
-if 'enhancement_running' not in st.session_state:
-    st.session_state.enhancement_running = False
+# Session state
+if 'running' not in st.session_state:
+    st.session_state.running = False
     st.session_state.results = None
 
-# Sidebar configuration
-with st.sidebar:
-    st.header("⚙️ Configuration")
-
-    # Databricks connection
-    st.subheader("🔐 Databricks")
-    databricks_host = st.text_input(
-        "Workspace URL",
-        value="https://krafton-sandbox.cloud.databricks.com",
-        help="Your Databricks workspace URL"
-    )
-    databricks_token = st.text_input(
-        "Personal Access Token",
-        type="password",
-        help="PAT for authentication"
-    )
-
-    # Fetch SQL Warehouses if credentials provided
-    warehouses = []
-    if databricks_host and databricks_token:
-        try:
-            import requests
-            response = requests.get(
-                f"{databricks_host}/api/2.0/sql/warehouses",
-                headers={"Authorization": f"Bearer {databricks_token}"},
-                timeout=5
-            )
-            if response.status_code == 200:
-                warehouses = [
-                    (w['id'], w['name'])
-                    for w in response.json().get('warehouses', [])
-                    if w.get('state') == 'RUNNING' or w.get('state') == 'STOPPED'
-                ]
-        except:
-            pass
-
-    if warehouses:
-        warehouse_options = {f"{name} ({wid[:8]}...)": wid for wid, name in warehouses}
-        selected = st.selectbox("SQL Warehouse", options=list(warehouse_options.keys()))
-        warehouse_id = warehouse_options[selected]
-    else:
-        warehouse_id = st.text_input("SQL Warehouse ID", help="For metric view creation")
-
-    st.divider()
-
-    # Genie Space config
-    st.subheader("🧞 Genie Space")
-
-    # Fetch Genie Spaces if credentials provided
-    spaces = []
-    if databricks_host and databricks_token:
-        try:
-            import requests
-            response = requests.get(
-                f"{databricks_host}/api/2.0/genie/spaces",
-                headers={"Authorization": f"Bearer {databricks_token}"},
-                timeout=5
-            )
-            if response.status_code == 200:
-                spaces = [
-                    (s['space_id'], s.get('display_name', s['space_id']))
-                    for s in response.json().get('spaces', [])
-                ]
-        except:
-            pass
-
-    if spaces:
-        space_options = {f"{name} ({sid[:8]}...)": sid for sid, name in spaces}
-        selected_space = st.selectbox("Select Genie Space", options=list(space_options.keys()))
-        space_id = space_options[selected_space]
-    else:
-        space_id = st.text_input(
-            "Space ID",
-            value="01f0f5c840c118b9824acd167525a768",
-            help="Genie Space to enhance"
-        )
-
-    st.divider()
-
-    # Benchmark selection
-    st.subheader("📊 Benchmarks")
-    benchmark_file = st.selectbox(
-        "Select Benchmark",
-        options=[
-            "benchmarks/kpi_benchmark.json",
-            "benchmarks/social_benchmark.json",
-            "benchmarks/benchmark.json"
-        ]
-    )
-
-    st.divider()
-
-    # Enhancement settings
-    st.subheader("⚙️ Settings")
-    target_score = st.slider("Target Score", 0.0, 1.0, 0.90, 0.05)
-    max_loops = st.number_input("Max Loops", 1, 10, 3)
-
-    # Batch mode settings
-    use_batch = st.checkbox("🚀 Use Batch Scoring", value=True, help="13x faster!")
-
-    if use_batch:
-        turbo_mode = st.checkbox(
-            "⚡ TURBO MODE",
-            value=False,
-            help="Maximum speed! May hit rate limits."
-        )
-
-        if turbo_mode:
-            st.warning("⚡ TURBO: Max concurrency!")
-            genie_concurrent = 10
-            sql_concurrent = 25
-        else:
-            genie_concurrent = st.slider(
-                "Genie Concurrent",
-                min_value=1,
-                max_value=15,
-                value=5,
-                help="Try 5-8 for best speed"
-            )
-            sql_concurrent = st.slider(
-                "SQL Concurrent",
-                min_value=1,
-                max_value=30,
-                value=15
-            )
-    else:
-        st.warning("⚠️ Sequential mode is 13x slower")
-        genie_concurrent = 1
-        sql_concurrent = 1
-
-    st.divider()
-
-    # Start button
-    start_button = st.button(
-        "🚀 Start Enhancement",
-        type="primary",
-        use_container_width=True,
-        disabled=st.session_state.enhancement_running
-    )
-
-# Main content area
-if not databricks_host or not databricks_token or not warehouse_id:
-    st.info("👈 Configure Databricks connection in the sidebar")
-
-    with st.expander("📖 How It Works", expanded=True):
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.markdown("### Phase 1: Score")
-            st.markdown("Run benchmarks through Genie and compare results")
-
-        with col2:
-            st.markdown("### Phase 2: Fix")
-            st.markdown("Generate targeted improvements based on failures")
-
-        with col3:
-            st.markdown("### Phase 3: Validate")
-            st.markdown("Re-score and measure improvement")
-
-        st.markdown("---")
-        st.markdown("### 🚀 Batch Scoring Performance")
-
-        perf_data = {
-            "Mode": ["Sequential", "Parallel", "Batch"],
-            "20 Benchmarks": ["~7 min", "~1.5 min", "~30s"],
-            "Speedup": ["1x", "4.6x", "13x"]
-        }
-        st.table(perf_data)
-
-elif start_button:
-    st.session_state.enhancement_running = True
-
+# Helper function to fetch resources
+def fetch_warehouses(host, token):
+    """Fetch SQL Warehouses from Databricks."""
     try:
-        st.markdown("## 🔄 Enhancement Running")
+        import requests
+        response = requests.get(
+            f"{host}/api/2.0/sql/warehouses",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            return [(w['id'], w['name']) for w in response.json().get('warehouses', [])]
+    except:
+        return []
 
-        # Build batch config
-        batch_config = {
-            "genie_max_concurrent": genie_concurrent,
-            "sql_max_concurrent": sql_concurrent,
-            "genie_retry_attempts": 1,
-            "genie_timeout": 45,
-            "sql_timeout": 30,
-            "eval_chunk_size": 5
-        }
+def fetch_spaces(host, token):
+    """Fetch Genie Spaces from Databricks."""
+    try:
+        import requests
+        response = requests.get(
+            f"{host}/api/2.0/genie/spaces",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            return [(s['space_id'], s.get('display_name', s['space_id']))
+                    for s in response.json().get('spaces', [])]
+    except:
+        return []
 
-        # Initialize clients
-        with st.status("Initializing...", expanded=True) as status:
-            st.write("🔌 Connecting to Databricks...")
+# Main UI
+st.title("🧞 Genie Space Enhancement")
+st.markdown("Improve your Genie Space performance with automated enhancements")
 
-            space_cloner = SpaceCloner(host=databricks_host, token=databricks_token)
+# Sidebar - Configuration
+with st.sidebar:
+    st.header("Configuration")
 
-            st.write("📦 Cloning space to dev-working...")
-            dev_working_id = space_cloner.create_dev_working_space(space_id)
-            st.success(f"✅ Dev space: {dev_working_id}")
+    # Authentication
+    with st.expander("🔐 Authentication", expanded=True):
+        host = st.text_input(
+            "Workspace URL",
+            value="https://krafton-sandbox.cloud.databricks.com",
+            help="Your Databricks workspace URL"
+        )
+        token = st.text_input(
+            "Access Token",
+            type="password",
+            help="Personal Access Token"
+        )
 
-            llm_client = DatabricksLLMClient(
-                host=databricks_host,
-                token=databricks_token,
-                endpoint_name="databricks-meta-llama-3-1-70b-instruct"
+    st.divider()
+
+    # Resources
+    warehouse_id = None
+    space_id = None
+
+    if host and token:
+        with st.expander("📦 Resources", expanded=True):
+            # SQL Warehouse
+            st.subheader("SQL Warehouse")
+            warehouses = fetch_warehouses(host, token)
+
+            if warehouses:
+                warehouse_options = {name: wid for wid, name in warehouses}
+                selected_warehouse = st.selectbox(
+                    "Select Warehouse",
+                    options=list(warehouse_options.keys()),
+                    help="Required for creating metric views"
+                )
+                warehouse_id = warehouse_options[selected_warehouse]
+            else:
+                warehouse_id = st.text_input(
+                    "Warehouse ID",
+                    help="Enter SQL Warehouse ID manually"
+                )
+
+            st.divider()
+
+            # Genie Space
+            st.subheader("Genie Space")
+            spaces = fetch_spaces(host, token)
+
+            if spaces:
+                space_options = {name: sid for sid, name in spaces}
+                selected_space = st.selectbox(
+                    "Select Space",
+                    options=list(space_options.keys()),
+                    help="Genie Space to enhance"
+                )
+                space_id = space_options[selected_space]
+            else:
+                space_id = st.text_input(
+                    "Space ID",
+                    help="Enter Genie Space ID manually"
+                )
+
+        st.divider()
+
+        # Advanced Settings
+        with st.expander("⚙️ Advanced Settings"):
+            target_score = st.slider(
+                "Target Score",
+                0.0, 1.0, 0.90, 0.05,
+                help="Stop when this score is reached"
             )
 
-            sql_executor = SQLExecutor(
-                host=databricks_host,
-                token=databricks_token,
-                warehouse_id=warehouse_id
+            use_turbo = st.checkbox(
+                "⚡ Turbo Mode",
+                value=False,
+                help="Maximum speed (may hit rate limits)"
             )
 
-            genie_client = GenieConversationalClient(
-                host=databricks_host,
-                token=databricks_token,
-                space_id=dev_working_id
-            )
+            if use_turbo:
+                st.warning("⚡ Maximum concurrency enabled")
+                genie_concurrent = 10
+                sql_concurrent = 25
+            else:
+                genie_concurrent = st.slider("Genie Concurrent", 1, 10, 5)
+                sql_concurrent = st.slider("SQL Concurrent", 1, 25, 15)
 
-            benchmark_loader = BenchmarkLoader()
-            benchmarks = benchmark_loader.load_from_file(project_root / benchmark_file)
-            st.success(f"✅ Loaded {len(benchmarks)} benchmarks")
+# Main content
+if not host or not token:
+    st.info("👈 Please configure authentication in the sidebar")
+    st.stop()
 
-            status.update(label="✅ Initialization complete", state="complete")
+if not warehouse_id or not space_id:
+    st.warning("👈 Please select SQL Warehouse and Genie Space")
+    st.stop()
 
-        # Progress callback
-        progress_bar = st.progress(0)
-        phase_text = st.empty()
+# Benchmark upload
+st.subheader("📊 Benchmark Questions")
 
-        def update_progress(phase, current, total, message):
-            phase_names = {
-                "genie": "🧞 Genie Queries",
-                "sql": "💾 SQL Execution",
-                "eval": "🤖 LLM Evaluation"
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    uploaded_file = st.file_uploader(
+        "Upload Benchmark File (JSON)",
+        type=['json'],
+        help="Upload a JSON file with benchmark questions"
+    )
+
+with col2:
+    st.markdown("**Format:**")
+    st.code("""[
+  {
+    "question": "...",
+    "expected_sql": "..."
+  }
+]""", language="json")
+
+# Start button
+if uploaded_file:
+    if st.button("🚀 Start Enhancement", type="primary", use_container_width=True, disabled=st.session_state.running):
+        st.session_state.running = True
+
+        try:
+            # Parse benchmark file
+            benchmark_data = json.loads(uploaded_file.read())
+
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(benchmark_data, f)
+                temp_benchmark_path = f.name
+
+            st.markdown("---")
+            st.markdown("## 🔄 Enhancement in Progress")
+
+            # Initialize clients
+            with st.status("Initializing...", expanded=False) as status:
+                space_cloner = SpaceCloner(host=host, token=token)
+                dev_working_id = space_cloner.create_dev_working_space(space_id)
+
+                llm_client = DatabricksLLMClient(
+                    host=host,
+                    token=token,
+                    endpoint_name="databricks-meta-llama-3-1-70b-instruct"
+                )
+
+                sql_executor = SQLExecutor(
+                    host=host,
+                    token=token,
+                    warehouse_id=warehouse_id
+                )
+
+                genie_client = GenieConversationalClient(
+                    host=host,
+                    token=token,
+                    space_id=dev_working_id
+                )
+
+                benchmark_loader = BenchmarkLoader()
+                benchmarks = benchmark_loader.load_from_file(temp_benchmark_path)
+
+                status.update(label="✅ Ready", state="complete")
+
+            # Progress tracking
+            progress_bar = st.progress(0)
+            phase_text = st.empty()
+
+            def update_progress(phase, current, total, message):
+                phase_names = {
+                    "genie": "🧞 Querying Genie",
+                    "sql": "💾 Executing SQL",
+                    "eval": "🤖 Evaluating Results"
+                }
+                progress = current / total if total > 0 else 0
+                progress_bar.progress(progress)
+                phase_text.write(f"**{phase_names.get(phase, phase)}**: {message}")
+
+            # Configure and run scorer
+            batch_config = {
+                "genie_max_concurrent": genie_concurrent,
+                "sql_max_concurrent": sql_concurrent,
+                "genie_retry_attempts": 1,
+                "genie_timeout": 45,
+                "sql_timeout": 30,
+                "eval_chunk_size": 5
             }
-            progress = current / total if total > 0 else 0
-            progress_bar.progress(progress)
-            phase_text.write(f"**{phase_names.get(phase, phase)}**: {message}")
 
-        # Initialize scorer
-        if use_batch:
             scorer = BatchBenchmarkScorer(
                 genie_client=genie_client,
                 llm_client=llm_client,
@@ -285,59 +263,63 @@ elif start_button:
                 config=batch_config,
                 progress_callback=update_progress
             )
-        else:
-            scorer = BenchmarkScorer(
-                genie_client=genie_client,
-                llm_client=llm_client,
-                sql_executor=sql_executor,
-                config={"parallel_workers": 0}
-            )
 
-        # Run scoring
-        st.markdown("### 📊 Scoring Benchmarks")
-        start_time = datetime.now()
-        score_results = scorer.score(benchmarks)
-        elapsed = (datetime.now() - start_time).total_seconds()
+            # Run scoring
+            start_time = datetime.now()
+            results = scorer.score(benchmarks)
+            elapsed = (datetime.now() - start_time).total_seconds()
 
-        # Clear progress
-        progress_bar.empty()
-        phase_text.empty()
+            # Clear progress
+            progress_bar.empty()
+            phase_text.empty()
 
-        # Show results
-        st.success(f"✅ Scoring complete in {elapsed:.1f}s")
+            # Show results
+            st.markdown("---")
+            st.markdown("## 📈 Results")
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Score", f"{score_results['score']:.1%}")
-        col2.metric("Passed", f"{score_results['passed']}/{score_results['total']}")
-        col3.metric("Time", f"{elapsed:.1f}s")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Score", f"{results['score']:.1%}")
+            col2.metric("Passed", f"{results['passed']}/{results['total']}")
+            col3.metric("Failed", results['failed'])
+            col4.metric("Duration", f"{elapsed:.1f}s")
 
-        # Show details
-        with st.expander("📋 Detailed Results", expanded=False):
-            for r in score_results['results']:
-                if not r['passed']:
-                    st.markdown(f"**❌ {r['question']}**")
-                    st.markdown(f"- Reason: {r.get('failure_reason', 'N/A')}")
-                    st.markdown(f"- Category: {r.get('failure_category', 'N/A')}")
+            # Failed questions
+            if results['failed'] > 0:
+                st.markdown("### ❌ Failed Questions")
 
-        st.session_state.results = score_results
-        st.session_state.enhancement_running = False
+                for r in results['results']:
+                    if not r['passed']:
+                        with st.expander(f"❌ {r['question']}"):
+                            st.markdown(f"**Reason:** {r.get('failure_reason', 'N/A')}")
+                            st.markdown(f"**Category:** {r.get('failure_category', 'N/A')}")
 
-    except Exception as e:
-        st.session_state.enhancement_running = False
-        st.error(f"❌ Error: {str(e)}")
-        logger.exception("Enhancement failed")
+                            if r.get('expected_sql'):
+                                st.markdown("**Expected SQL:**")
+                                st.code(r['expected_sql'], language="sql")
 
+                            if r.get('genie_sql'):
+                                st.markdown("**Genie SQL:**")
+                                st.code(r['genie_sql'], language="sql")
+            else:
+                st.success("🎉 All questions passed!")
+
+            st.session_state.results = results
+            st.session_state.running = False
+
+        except Exception as e:
+            st.session_state.running = False
+            st.error(f"❌ Error: {str(e)}")
+            logger.exception("Enhancement failed")
+
+# Show previous results
 elif st.session_state.results:
-    st.markdown("## 📈 Latest Results")
+    st.markdown("---")
+    st.markdown("## 📈 Previous Results")
+
     results = st.session_state.results
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Score", f"{results['score']:.1%}")
     col2.metric("Passed", f"{results['passed']}/{results['total']}")
-    col3.metric("Duration", f"{results.get('duration_seconds', 0):.1f}s")
-
-    with st.expander("📋 Detailed Results"):
-        for r in results['results']:
-            if not r['passed']:
-                st.markdown(f"**❌ {r['question']}**")
-                st.markdown(f"- Reason: {r.get('failure_reason', 'N/A')}")
+    col3.metric("Failed", results['failed'])
+    col4.metric("Duration", f"{results.get('duration_seconds', 0):.1f}s")
