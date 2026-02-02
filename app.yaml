@@ -8,6 +8,17 @@ command:
   - '8000'
 
 env:
+  # Databricks workspace connection (automatically injected by Databricks Apps)
+  - name: DATABRICKS_HOST
+    value: "{{workspace.host}}"
+
+  - name: DATABRICKS_SERVER_HOSTNAME
+    value: "{{workspace.server_hostname}}"
+
+  # Databricks authentication token (from secrets scope)
+  - name: DATABRICKS_TOKEN
+    value: "{{secrets/genie-enhancement/service-token}}"
+
   # Frontend static export location (Next.js output: 'export')
   - name: FRONTEND_EXPORT_DIR
     value: "frontend/out"
@@ -15,7 +26,3 @@ env:
   # Python unbuffered output
   - name: PYTHONUNBUFFERED
     value: "1"
-
-  # Note: DATABRICKS_HOST and DATABRICKS_TOKEN are NOT set here
-  # Users must provide their own credentials in the Configure step
-  # This ensures operations happen on behalf of the user with proper Genie permissions

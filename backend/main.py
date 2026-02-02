@@ -131,13 +131,29 @@ async def health_check():
 async def get_workspace_config():
     """Get default workspace configuration from environment variables.
 
-    Note: Always returns empty values to force user authentication.
-    This ensures operations happen on behalf of the user with proper permissions.
+    Returns empty if secrets/templates aren't configured, forcing user to provide credentials.
+    This ensures operations happen on behalf of the user with proper Genie permissions.
     """
+    # Get host - check if it's a template variable
+    host = os.getenv("DATABRICKS_HOST", "")
+    if host.startswith("{{"):
+        # Template not interpolated, try server hostname
+        server_hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME", "")
+        if server_hostname and not server_hostname.startswith("{{"):
+            host = f"https://{server_hostname}"
+        else:
+            host = ""
+    elif host and not host.startswith("http"):
+        host = f"https://{host}"
+
+    # Get token - check if it's a template variable
+    token = os.getenv("DATABRICKS_TOKEN", "")
+    if token.startswith("{{"):
+        token = ""  # Secret not configured, force user to provide
+
     return {
-        "host": "",
-        "token": "",
-        "auth_type": "user_provided",
+        "host": host,
+        "token": token,
     }
 
 
