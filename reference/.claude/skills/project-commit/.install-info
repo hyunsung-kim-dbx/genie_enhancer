@@ -1,0 +1,17 @@
+Genie Commit Skill
+==================
+
+Created: 2026-01-28
+Type: Project-specific commit automation
+Project: Genie Lamp Agent
+
+This skill provides:
+- Automated commit workflow with testing
+- Conventional commit message patterns (feat/fix/refactor/docs/test)
+- Virtual environment handling (.venv/bin/python)
+- Pre-commit validation
+- Project-specific best practices
+
+To use: Ask Claude to "commit" or "create a commit"
+
+The skill will automatically trigger when you request to commit changes.

@@ -1,0 +1,104 @@
+# Asset Bundle configuration for Genie Lamp Agent
+
+bundle:
+  name: genie-lamp-agent
+
+sync:
+  include:
+    - frontend/out
+
+  exclude:
+    # Virtual environments
+    - ".venv"
+    - "venv"
+    - "ENV"
+    - "env"
+    - "backend/.venv"
+    - "backend/venv"
+
+    # Node modules and frontend build
+    - "frontend/node_modules"
+    - "frontend/.next"
+
+    # Local storage and runtime data
+    - "storage"
+    - "output"
+
+    # Git and development
+    - ".git"
+    - ".databricks"
+    - "worktrees"
+
+    # Python bytecode
+    - "__pycache__"
+    - "*.pyc"
+    - "*.pyo"
+    - "*.pyd"
+
+    # Environment and secrets
+    - ".env"
+    - ".env.local"
+    - "backend/.env"
+    - "frontend/.env.local"
+
+    # Cache and temporary files
+    - "*.log"
+    - "*.pid"
+    - ".parse_cache.json"
+    - "backend/.parse_cache.json"
+    - ".last_test_run"
+
+    # IDE and OS
+    - ".vscode"
+    - ".idea"
+    - ".DS_Store"
+
+# Base resources (can be overridden per target)
+resources:
+  apps:
+    genie_lamp_app:
+      name: genie-lamp-agent
+      description: Genie Lamp Agent - LLM-powered Databricks Genie space configuration generator
+      permissions:
+        - group_name: databricks-partners
+          level: CAN_USE
+
+# Target environments
+targets:
+  dev:
+    mode: development
+    default: true
+    resources:
+      apps:
+        genie_lamp_app:
+          # Override app name with -dev suffix
+          name: genie-lamp-agent-dev
+          # Use bundle deployment path
+          source_code_path: ${workspace.file_path}/files/
+          config:
+            env:
+              # Override with dev-specific secrets
+              - name: DATABRICKS_TOKEN
+                value: "{{secrets/genie-lamp/service-token-dev}}"
+
+              - name: DATABRICKS_HTTP_PATH
+                value: "{{secrets/genie-lamp/sql-warehouse-http-path-dev}}"
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/databricks-agent-poc/genie-lamp-app
+    resources:
+      apps:
+        genie_lamp_app:
+          # Keep base name for prod
+          name: genie-lamp-agent
+          source_code_path: /Workspace/Shared/databricks-agent-poc/genie-lamp-app/files/
+          config:
+            env:
+              # Override with prod-specific secrets
+              - name: DATABRICKS_TOKEN
+                value: "{{secrets/genie-lamp/service-token-prod}}"
+
+              - name: DATABRICKS_HTTP_PATH
+                value: "{{secrets/genie-lamp/sql-warehouse-http-path-prod}}"

@@ -1,0 +1,164 @@
+[
+  {
+    "question": "지난 주 가장 많이 팔린 제품은 무엇인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "easy",
+    "tags": ["sales", "product", "ranking"]
+  },
+  {
+    "question": "어떤 카테고리가 가장 높은 매출을 기록했나요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "easy",
+    "tags": ["category", "revenue", "ranking"]
+  },
+  {
+    "question": "전체 플랫폼에서 반응이 가장 좋은 브랜드는 무엇인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "medium",
+    "tags": ["brand", "engagement", "cross-platform"]
+  },
+  {
+    "question": "지금 가장 인기있는 제품 트렌드는 무엇인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "medium",
+    "tags": ["trend", "product", "popularity"]
+  },
+  {
+    "question": "고객 리뷰에서 평점이 가장 높은 제품은 무엇인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "easy",
+    "tags": ["review", "rating", "product"]
+  },
+  {
+    "question": "최근 24시간 동안 가장 많이 구매된 상품은 무엇인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "easy",
+    "tags": ["recent", "purchase", "product"]
+  },
+  {
+    "question": "어떤 고객 세그먼트가 가장 활발한가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "medium",
+    "tags": ["customer", "segment", "activity"]
+  },
+  {
+    "question": "시간대별로 구매량이 가장 많은 시간은 언제인가요?",
+    "category": "KPI & Sales Analysis",
+    "difficulty": "medium",
+    "tags": ["time", "purchase", "pattern"]
+  },
+  {
+    "question": "긍정/부정 리뷰 동향이 있었는데, 반응이 많은 상세 내용을 요약해서 추출해줘",
+    "category": "Sentiment & Trend Analysis",
+    "difficulty": "hard",
+    "tags": ["sentiment", "review", "summary"]
+  },
+  {
+    "question": "부정 리뷰의 주요 키워드는 무엇인가요?",
+    "category": "Sentiment & Trend Analysis",
+    "difficulty": "medium",
+    "tags": ["negative", "review", "keywords"]
+  },
+  {
+    "question": "고객 평점에서 부정 리뷰가 급증한 시점과 주요 불만 사항은 무엇인가요?",
+    "category": "Sentiment & Trend Analysis",
+    "difficulty": "hard",
+    "tags": ["negative", "spike", "complaints"]
+  },
+  {
+    "question": "온라인과 오프라인에서 긍정/부정 비율은 어떻게 다른가요?",
+    "category": "Sentiment & Trend Analysis",
+    "difficulty": "medium",
+    "tags": ["channel", "sentiment", "comparison"]
+  },
+  {
+    "question": "브랜드별로 고객 반응을 비교해주세요",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["brand", "comparison", "customer"]
+  },
+  {
+    "question": "카테고리별로 판매 트렌드를 비교해주세요",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["category", "trend", "comparison"]
+  },
+  {
+    "question": "프로모션 전후 판매량 변화는 어떻게 되나요?",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["promotion", "sales", "before-after"]
+  },
+  {
+    "question": "이 시간대에 어떤 제품이 많이 팔렸는지 시간 순서대로 보여줘",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["temporal", "product", "ranking"]
+  },
+  {
+    "question": "이 시점에 고객들은 무슨 제품을 구매했나?",
+    "category": "Cross-Analysis",
+    "difficulty": "easy",
+    "tags": ["time", "product", "purchase"]
+  },
+  {
+    "question": "매출이 특정 시점에 급증했는데, 그때 어떤 제품이 인기였나?",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["spike", "revenue", "product"]
+  },
+  {
+    "question": "지역별로 구매 패턴 차이는 어떻게 되나요?",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["region", "pattern", "comparison"]
+  },
+  {
+    "question": "마케팅 캠페인별 매출 성과는 어떻게 되나요?",
+    "category": "Cross-Analysis",
+    "difficulty": "medium",
+    "tags": ["marketing", "campaign", "revenue"]
+  },
+  {
+    "question": "그래서 우리 고객들은 우리 제품에 대해서 뭐라고 말하고 있어?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "customer", "sentiment"]
+  },
+  {
+    "question": "최근 우리 제품에 대한 고객들의 반응은 어때?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "recent", "reaction"]
+  },
+  {
+    "question": "온라인과 오프라인에서 우리 제품에 대해 어떤 얘기들이 오가고 있어?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "channel", "conversation"]
+  },
+  {
+    "question": "고객들이 우리 제품에 대해 가장 많이 언급하는 것은 뭐야?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "mentions", "frequency"]
+  },
+  {
+    "question": "전반적으로 우리 브랜드에 대한 분위기는 어떤가요?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "brand", "overall"]
+  },
+  {
+    "question": "고객들이 우리 제품에 대해 좋아하는 것과 불만인 것은 뭐야?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "pros-cons", "sentiment"]
+  },
+  {
+    "question": "최근 일주일 동안 고객 반응의 주요 변화는 뭐야?",
+    "category": "Exploratory Questions",
+    "difficulty": "hard",
+    "tags": ["open-ended", "trend", "change"]
+  }
+]

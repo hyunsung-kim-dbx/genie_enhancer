@@ -107,28 +107,52 @@ with col1:
     warehouses = fetch_warehouses(host, token)
 
     if warehouses:
-        warehouse_options = {name: wid for wid, name in warehouses}
-        selected_warehouse = st.selectbox(
+        st.caption(f"Found {len(warehouses)} warehouse(s)")
+
+        # Create display options with name and truncated ID
+        display_options = []
+        warehouse_map = {}
+
+        for wid, name in warehouses:
+            display = f"{name} ({wid[:12]}...)" if len(wid) > 12 else f"{name} ({wid})"
+            display_options.append(display)
+            warehouse_map[display] = wid
+
+        selected = st.selectbox(
             "Select Warehouse",
-            options=list(warehouse_options.keys())
+            options=display_options,
+            label_visibility="collapsed"
         )
-        warehouse_id = warehouse_options[selected_warehouse]
+        warehouse_id = warehouse_map[selected]
     else:
-        warehouse_id = st.text_input("Warehouse ID")
+        st.warning("No warehouses found - enter ID manually")
+        warehouse_id = st.text_input("Warehouse ID", label_visibility="collapsed")
 
 with col2:
     st.markdown("**Genie Space**")
     spaces = fetch_spaces(host, token)
 
     if spaces:
-        space_options = {name: sid for sid, name in spaces}
-        selected_space = st.selectbox(
+        st.caption(f"Found {len(spaces)} space(s)")
+
+        # Create display options with name and truncated ID
+        display_options = []
+        space_map = {}
+
+        for sid, name in spaces:
+            display = f"{name} ({sid[:12]}...)" if len(sid) > 12 else f"{name} ({sid})"
+            display_options.append(display)
+            space_map[display] = sid
+
+        selected = st.selectbox(
             "Select Space",
-            options=list(space_options.keys())
+            options=display_options,
+            label_visibility="collapsed"
         )
-        space_id = space_options[selected_space]
+        space_id = space_map[selected]
     else:
-        space_id = st.text_input("Space ID")
+        st.warning("No spaces found - enter ID manually")
+        space_id = st.text_input("Space ID", label_visibility="collapsed")
 
 if not warehouse_id or not space_id:
     st.warning("👆 Please select SQL Warehouse and Genie Space")

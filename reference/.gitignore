@@ -1,0 +1,84 @@
+# Storage and runtime data
+storage/
+*.pid
+
+# Change logs and feedback (business artifacts)
+change_logs/
+feedback/
+data/
+real_requirements/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+frontend/package-lock.json
+
+# Backend
+backend/.env
+backend/.parse_cache.json
+backend/storage/uploads/
+
+# Output and generated files
+output/
+*.log
+
+# JSON files (with exceptions)
+*.json
+!sample/benchmarks/benchmarks.json
+!frontend/package.json
+!frontend/tsconfig.json
+
+# Cache files
+.parse_cache.json
+.last_test_run
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Claude Code
+.claude/settings.local.json
+
+# Git worktrees
+worktrees/
