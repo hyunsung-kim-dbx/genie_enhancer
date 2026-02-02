@@ -6,24 +6,55 @@ bundle:
 
 sync:
   exclude:
-    - "frontend/.next/**"
-    - "frontend/node_modules/**"
-    - ".venv/**"
-    - ".git/**"
-    - "**/__pycache__/**"
-    - "**/*.pyc"
-    - ".pytest_cache/**"
-    - "**/*.egg-info/**"
-    - "storage/**"
-    - "output/**"
-    - ".databricks/**"
-    - "worktrees/**"
-    - "reference/**"
-    - "docs/**"
-    - "benchmarks/**"
-    - "config/**"
-    - "schema/**"
-    - "workflows/**"
+    # Virtual environments
+    - ".venv"
+    - "venv"
+    - "ENV"
+    - "env"
+
+    # Node modules and frontend build
+    - "frontend/node_modules"
+    - "frontend/.next"
+
+    # Local storage and runtime data
+    - "storage"
+    - "output"
+
+    # Git and development
+    - ".git"
+    - ".databricks"
+    - "worktrees"
+
+    # Python bytecode
+    - "__pycache__"
+    - "*.pyc"
+    - "*.pyo"
+    - "*.pyd"
+
+    # Environment and secrets
+    - ".env"
+    - ".env.local"
+
+    # Cache and temporary files
+    - "*.log"
+    - "*.pid"
+    - ".parse_cache.json"
+
+    # IDE and OS
+    - ".vscode"
+    - ".idea"
+    - ".DS_Store"
+
+    # Reference code (not needed for deployment)
+    - "reference"
+
+    # Documentation and non-runtime files
+    - "docs"
+    - "claudedocs"
+    - "benchmarks"
+    - "config"
+    - "schema"
+    - "workflows"
 
 # App resource definition - enables secret interpolation
 resources:
