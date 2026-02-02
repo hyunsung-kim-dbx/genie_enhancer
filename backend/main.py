@@ -129,20 +129,15 @@ async def health_check():
 # Workspace configuration
 @app.get("/api/workspace/config")
 async def get_workspace_config():
-    """Get default workspace configuration from environment variables."""
-    # Get host - handle template variables that weren't interpolated
-    host = os.getenv("DATABRICKS_HOST", "")
-    if host.startswith("{{"):
-        # Template variable not interpolated, try DATABRICKS_SERVER_HOSTNAME
-        server_hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME", "")
-        if server_hostname and not server_hostname.startswith("{{"):
-            host = f"https://{server_hostname}"
-        else:
-            host = ""  # Return empty if neither worked
+    """Get default workspace configuration from environment variables.
 
+    Note: Always returns empty values to force user authentication.
+    This ensures operations happen on behalf of the user with proper permissions.
+    """
     return {
-        "host": host,
-        "token": os.getenv("DATABRICKS_TOKEN", ""),
+        "host": "",
+        "token": "",
+        "auth_type": "user_provided",
     }
 
 
@@ -157,17 +152,16 @@ async def list_warehouses(credentials: WorkspaceCredentials):
     """List available SQL Warehouses."""
     try:
         from databricks.sdk import WorkspaceClient
-        from databricks.sdk.config import Config
 
-        # Explicitly use PAT authentication, ignore OAuth
-        config = Config(
-            host=credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}",
-            token=credentials.token,
-            # Disable OAuth to avoid conflicts
-            client_id=None,
-            client_secret=None,
-        )
-        client = WorkspaceClient(config=config)
+        # Use credentials from request (user-provided in UI)
+        host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
+
+        # If token is provided, use PAT auth. Otherwise SDK will use OAuth from env.
+        if credentials.token:
+            client = WorkspaceClient(host=host, token=credentials.token)
+        else:
+            # Use app's OAuth credentials (DATABRICKS_CLIENT_ID/SECRET from env)
+            client = WorkspaceClient(host=host)
 
         warehouses = []
         for wh in client.warehouses.list():
@@ -188,17 +182,16 @@ async def list_genie_spaces(credentials: WorkspaceCredentials):
     """List available Genie Spaces."""
     try:
         from databricks.sdk import WorkspaceClient
-        from databricks.sdk.config import Config
 
-        # Explicitly use PAT authentication, ignore OAuth
-        config = Config(
-            host=credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}",
-            token=credentials.token,
-            # Disable OAuth to avoid conflicts
-            client_id=None,
-            client_secret=None,
-        )
-        client = WorkspaceClient(config=config)
+        # Use credentials from request (user-provided in UI)
+        host = credentials.host if credentials.host.startswith("https://") else f"https://{credentials.host}"
+
+        # If token is provided, use PAT auth. Otherwise SDK will use OAuth from env.
+        if credentials.token:
+            client = WorkspaceClient(host=host, token=credentials.token)
+        else:
+            # Use app's OAuth credentials (DATABRICKS_CLIENT_ID/SECRET from env)
+            client = WorkspaceClient(host=host)
 
         spaces = []
         for space in client.genie.spaces.list():
