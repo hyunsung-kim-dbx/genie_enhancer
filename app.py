@@ -21,7 +21,7 @@ from pathlib import Path
 app_dir = Path(__file__).parent / "app"
 sys.path.insert(0, str(app_dir))
 
-from pages.enhance import render_enhancement_page
+from pages.enhance_real import render_enhancement_page  # Using REAL batch scorer, not mock
 
 # Configure page
 st.set_page_config(
