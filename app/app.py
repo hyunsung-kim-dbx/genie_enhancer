@@ -754,23 +754,94 @@ elif st.session_state.step == 'analyze':
     scorer = clients['scorer']
     planner = clients['planner']
 
-    # Initial scoring
-    st.subheader("Initial Benchmark Scoring")
+    # Check if we already have results (after fix selection)
+    if 'initial_results' not in st.session_state:
+        # Initial scoring with verbose output
+        st.subheader("📊 Scoring Benchmarks")
 
-    progress = st.progress(0)
-    status = st.empty()
+        progress = st.progress(0)
+        log_container = st.container()
 
-    status.markdown("🔄 Scoring benchmarks on dev-working space...")
+        with log_container:
+            st.markdown("**Scoring each benchmark...**")
 
-    initial_results = scorer.score(st.session_state.benchmarks)
-    st.session_state.initial_score = initial_results['score']
-    st.session_state.best_score = initial_results['score']
-    st.session_state.current_score = initial_results['score']
-    st.session_state.scores_history.append(initial_results['score'])
+        benchmarks = st.session_state.benchmarks
+        total = len(benchmarks)
 
-    progress.progress(0.3)
+        # Score with verbose logging
+        results = []
+        passed = 0
+        for i, bm in enumerate(benchmarks):
+            q = bm.get('korean_question') or bm.get('question', 'N/A')
+            short_q = q[:50] + "..." if len(q) > 50 else q
 
-    # Display initial results
+            with log_container:
+                st.caption(f"[{i+1}/{total}] {short_q}")
+
+            # Score individual benchmark
+            result = scorer.score([bm])
+            bm_result = result['results'][0] if result['results'] else {'passed': False}
+            results.append(bm_result)
+
+            if bm_result.get('passed'):
+                passed += 1
+
+            progress.progress((i + 1) / total * 0.5)
+
+        # Compile results
+        initial_results = {
+            'score': passed / total if total > 0 else 0,
+            'passed': passed,
+            'failed': total - passed,
+            'total': total,
+            'results': results
+        }
+
+        st.session_state.initial_results = initial_results
+        st.session_state.initial_score = initial_results['score']
+        st.session_state.best_score = initial_results['score']
+        st.session_state.current_score = initial_results['score']
+        st.session_state.scores_history.append(initial_results['score'])
+
+        # Display results
+        with log_container:
+            st.success(f"✅ Scoring complete: {passed}/{total} passed ({initial_results['score']:.1%})")
+
+        # Check if already at target
+        if initial_results['score'] >= st.session_state.config['target_score']:
+            st.success("🎉 Already at target score!")
+            st.session_state.step = 'complete'
+            st.rerun()
+
+        # Analyze failures with verbose output
+        st.markdown("---")
+        st.subheader("🔍 Analyzing Failures")
+
+        failed_results = [r for r in initial_results['results'] if not r.get('passed')]
+
+        with log_container:
+            st.markdown(f"**Analyzing {len(failed_results)} failed benchmarks...**")
+
+        grouped_fixes = planner.generate_plan(
+            failed_benchmarks=failed_results,
+            space_config=st.session_state.initial_config,
+            parallel_workers=3
+        )
+
+        st.session_state.grouped_fixes = grouped_fixes
+        progress.progress(1.0)
+
+        with log_container:
+            total_fixes = sum(len(f) for f in grouped_fixes.values())
+            st.success(f"✅ Generated {total_fixes} fixes")
+
+        st.rerun()  # Rerun to show fix selection UI
+
+    # Show results and fix selection
+    initial_results = st.session_state.initial_results
+    grouped_fixes = st.session_state.grouped_fixes
+
+    # Display score summary
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Initial Score", f"{initial_results['score']:.1%}")
@@ -779,28 +850,10 @@ elif st.session_state.step == 'analyze':
     with col3:
         st.metric("Failed", initial_results['failed'])
 
-    # Check if already at target
-    if initial_results['score'] >= st.session_state.config['target_score']:
-        st.success("🎉 Already at target score!")
-        st.session_state.step = 'complete'
-        st.rerun()
+    st.markdown("---")
 
-    # Analyze failures
-    status.markdown("🔄 Analyzing failures and generating fixes...")
-
-    failed_results = [r for r in initial_results['results'] if not r['passed']]
-
-    grouped_fixes = planner.generate_plan(
-        failed_benchmarks=failed_results,
-        space_config=st.session_state.initial_config,
-        parallel_workers=3
-    )
-
-    st.session_state.grouped_fixes = grouped_fixes
-    progress.progress(1.0)
-
-    # Display fix summary
-    st.subheader("Generated Fixes (9 Categories)")
+    # Fix selection UI
+    st.subheader("🔧 Select Fixes to Apply")
 
     FIX_CATEGORIES = [
         'instruction_fix',
@@ -810,34 +863,91 @@ elif st.session_state.step == 'analyze':
         'sample_queries_delete', 'sample_queries_add',
     ]
 
+    # Initialize selected fixes in session state
+    if 'selected_fixes' not in st.session_state:
+        st.session_state.selected_fixes = {}
+        for category in FIX_CATEGORIES:
+            fixes = grouped_fixes.get(category, [])
+            # Default: all selected
+            st.session_state.selected_fixes[category] = [True] * len(fixes)
+
+    # Select All / Deselect All buttons
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        if st.button("✅ Select All"):
+            for category in FIX_CATEGORIES:
+                fixes = grouped_fixes.get(category, [])
+                st.session_state.selected_fixes[category] = [True] * len(fixes)
+            st.rerun()
+    with col2:
+        if st.button("❌ Deselect All"):
+            for category in FIX_CATEGORIES:
+                fixes = grouped_fixes.get(category, [])
+                st.session_state.selected_fixes[category] = [False] * len(fixes)
+            st.rerun()
+
+    # Display fixes by category with checkboxes
     total_fixes = 0
+    selected_count = 0
+
     for category in FIX_CATEGORIES:
         fixes = grouped_fixes.get(category, [])
-        total_fixes += len(fixes)
+        if not fixes:
+            continue
 
+        total_fixes += len(fixes)
         icon, name = get_fix_category_display(category)
 
-        with st.expander(f"{icon} {name} ({len(fixes)} fixes)", expanded=len(fixes) > 0):
-            if fixes:
-                for i, fix in enumerate(fixes[:10], 1):
-                    st.markdown(f"{i}. {format_fix_description(fix)}")
-                if len(fixes) > 10:
-                    st.caption(f"... and {len(fixes) - 10} more")
-            else:
-                st.caption("No fixes of this type")
+        cat_selected = sum(st.session_state.selected_fixes.get(category, []))
+        selected_count += cat_selected
 
-    st.markdown(f"**Total: {total_fixes} fixes**")
+        with st.expander(f"{icon} {name} ({cat_selected}/{len(fixes)} selected)", expanded=False):
+            # Category-level select all
+            cat_all = st.checkbox(
+                f"Select all {name}",
+                value=all(st.session_state.selected_fixes.get(category, [])),
+                key=f"cat_all_{category}"
+            )
+            if cat_all != all(st.session_state.selected_fixes.get(category, [])):
+                st.session_state.selected_fixes[category] = [cat_all] * len(fixes)
+                st.rerun()
+
+            st.markdown("---")
+
+            # Individual fix checkboxes
+            for i, fix in enumerate(fixes):
+                desc = format_fix_description(fix)
+                checked = st.session_state.selected_fixes[category][i]
+                new_checked = st.checkbox(
+                    desc,
+                    value=checked,
+                    key=f"fix_{category}_{i}"
+                )
+                if new_checked != checked:
+                    st.session_state.selected_fixes[category][i] = new_checked
+
+    st.markdown(f"**Selected: {selected_count}/{total_fixes} fixes**")
 
     if total_fixes == 0:
         st.warning("No fixes generated. Check your benchmarks or space configuration.")
+    elif selected_count == 0:
+        st.warning("No fixes selected. Please select at least one fix to apply.")
     else:
-        st.info(f"""
-        ⏱️ **Estimated time:** ~{(st.session_state.config['indexing_wait'] + 30) / 60:.0f} minutes
+        st.markdown("---")
+        st.info(f"**{selected_count} fixes** will be applied, then validated.")
 
-        All fixes will be applied in one batch, then validated.
-        """)
+        if st.button(f"Apply {selected_count} Selected Fixes →", type="primary"):
+            # Filter grouped_fixes to only include selected fixes
+            filtered_fixes = {}
+            for category in FIX_CATEGORIES:
+                fixes = grouped_fixes.get(category, [])
+                selected = st.session_state.selected_fixes.get(category, [])
+                filtered_fixes[category] = [
+                    fix for i, fix in enumerate(fixes)
+                    if i < len(selected) and selected[i]
+                ]
 
-        if st.button("Apply All Fixes →", type="primary"):
+            st.session_state.grouped_fixes = filtered_fixes
             st.session_state.step = 'running'
             st.rerun()
 
