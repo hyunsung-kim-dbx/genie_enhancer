@@ -51,7 +51,7 @@ with st.sidebar:
     st.subheader("🔐 Databricks")
     databricks_host = st.text_input(
         "Workspace URL",
-        value="https://e2-demo-field-eng.cloud.databricks.com",
+        value="https://krafton-sandbox.cloud.databricks.com",
         help="Your Databricks workspace URL"
     )
     databricks_token = st.text_input(
