@@ -349,17 +349,13 @@ if st.session_state.step == 'configure':
         # Store auth config
         st.session_state.auth_config = auth_config
 
-        # Use user token for API calls (respects user permissions)
-        # Fall back to SP token if user token not available
-        user_token = auth_config.get('user_token')
-        if user_token:
-            api_token = user_token
-        else:
-            try:
-                auth_headers = auth_config['workspace_client'].config.authenticate()
-                api_token = auth_headers.get('Authorization', '').replace('Bearer ', '')
-            except:
-                api_token = None
+        # Use SP token for listing resources (admin operations)
+        # User token is only for data queries later
+        try:
+            auth_headers = auth_config['workspace_client'].config.authenticate()
+            api_token = auth_headers.get('Authorization', '').replace('Bearer ', '')
+        except:
+            api_token = None
 
         col1, col2 = st.columns(2)
 
