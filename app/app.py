@@ -760,33 +760,59 @@ elif st.session_state.step == 'analyze':
         st.subheader("📊 Scoring Benchmarks")
 
         progress = st.progress(0)
-        log_container = st.container()
-
-        with log_container:
-            st.markdown("**Scoring each benchmark...**")
+        status_text = st.empty()
+        results_table = st.empty()
 
         benchmarks = st.session_state.benchmarks
         total = len(benchmarks)
 
-        # Score with verbose logging
+        # Score with live table updates
         results = []
+        table_data = []
         passed = 0
+
         for i, bm in enumerate(benchmarks):
             q = bm.get('korean_question') or bm.get('question', 'N/A')
-            short_q = q[:50] + "..." if len(q) > 50 else q
+            short_q = q[:60] + "..." if len(q) > 60 else q
 
-            with log_container:
-                st.caption(f"[{i+1}/{total}] {short_q}")
+            status_text.markdown(f"**[{i+1}/{total}]** Evaluating: _{short_q}_")
 
             # Score individual benchmark
             result = scorer.score([bm])
             bm_result = result['results'][0] if result['results'] else {'passed': False}
+
+            # Store benchmark info in result for later use
+            bm_result['benchmark'] = bm
             results.append(bm_result)
 
-            if bm_result.get('passed'):
+            # Extract details for table
+            is_passed = bm_result.get('passed', False)
+            if is_passed:
                 passed += 1
 
+            genie_sql = bm_result.get('genie_sql', 'N/A')
+            if genie_sql and len(genie_sql) > 50:
+                genie_sql = genie_sql[:50] + "..."
+
+            reason = bm_result.get('reason', bm_result.get('error', 'N/A'))
+            if reason and len(reason) > 80:
+                reason = reason[:80] + "..."
+
+            table_data.append({
+                "#": i + 1,
+                "Question": short_q,
+                "Result": "✅ Pass" if is_passed else "❌ Fail",
+                "Reason": reason if not is_passed else "Match",
+            })
+
+            # Update table
+            import pandas as pd
+            df = pd.DataFrame(table_data)
+            results_table.dataframe(df, use_container_width=True, hide_index=True)
+
             progress.progress((i + 1) / total * 0.5)
+
+        status_text.empty()
 
         # Compile results
         initial_results = {
@@ -802,10 +828,7 @@ elif st.session_state.step == 'analyze':
         st.session_state.best_score = initial_results['score']
         st.session_state.current_score = initial_results['score']
         st.session_state.scores_history.append(initial_results['score'])
-
-        # Display results
-        with log_container:
-            st.success(f"✅ Scoring complete: {passed}/{total} passed ({initial_results['score']:.1%})")
+        st.session_state.results_table_data = table_data
 
         # Check if already at target
         if initial_results['score'] >= st.session_state.config['target_score']:
@@ -818,9 +841,7 @@ elif st.session_state.step == 'analyze':
         st.subheader("🔍 Analyzing Failures")
 
         failed_results = [r for r in initial_results['results'] if not r.get('passed')]
-
-        with log_container:
-            st.markdown(f"**Analyzing {len(failed_results)} failed benchmarks...**")
+        status_text.markdown(f"**Analyzing {len(failed_results)} failed benchmarks...**")
 
         grouped_fixes = planner.generate_plan(
             failed_benchmarks=failed_results,
@@ -831,9 +852,8 @@ elif st.session_state.step == 'analyze':
         st.session_state.grouped_fixes = grouped_fixes
         progress.progress(1.0)
 
-        with log_container:
-            total_fixes = sum(len(f) for f in grouped_fixes.values())
-            st.success(f"✅ Generated {total_fixes} fixes")
+        total_fixes = sum(len(f) for f in grouped_fixes.values())
+        st.success(f"✅ Generated {total_fixes} fixes")
 
         st.rerun()  # Rerun to show fix selection UI
 
@@ -849,6 +869,13 @@ elif st.session_state.step == 'analyze':
         st.metric("Passed", f"{initial_results['passed']}/{initial_results['total']}")
     with col3:
         st.metric("Failed", initial_results['failed'])
+
+    # Show benchmark results table
+    if 'results_table_data' in st.session_state:
+        with st.expander("📋 Benchmark Results Detail", expanded=False):
+            import pandas as pd
+            df = pd.DataFrame(st.session_state.results_table_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
