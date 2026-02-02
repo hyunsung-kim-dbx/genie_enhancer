@@ -36,6 +36,7 @@ sys.path.insert(0, str(project_root))
 from lib.genie_client import GenieConversationalClient
 from lib.space_cloner import SpaceCloner
 from lib.scorer import BenchmarkScorer
+from lib.batch_scorer import BatchBenchmarkScorer
 from lib.benchmark_parser import BenchmarkLoader
 from lib.llm import DatabricksLLMClient
 from lib.sql import SQLExecutor
@@ -63,6 +64,8 @@ def run_enhancement(
     max_loops: int = 3,
     auto_promote: bool = False,
     auto_cleanup: bool = True,
+    batch_mode: bool = True,
+    batch_config: dict = None,
 ):
     """
     Run the full enhancement loop.
@@ -79,6 +82,8 @@ def run_enhancement(
         max_loops: Maximum enhancement loops
         auto_promote: Automatically promote on success
         auto_cleanup: Clean up dev spaces on completion
+        batch_mode: Use batch scorer (much faster) vs sequential
+        batch_config: Batch scorer configuration dict (optional)
 
     Returns:
         dict with results
@@ -150,12 +155,42 @@ def run_enhancement(
         verbose=False
     )
 
-    scorer = BenchmarkScorer(
-        genie_client=genie_client,
-        llm_client=llm_client,
-        sql_executor=sql_executor,
-        config={"parallel_workers": 0}
-    )
+    # Initialize scorer (batch or sequential)
+    if batch_mode:
+        logger.info("Using BATCH scorer (13x faster)")
+
+        # Default batch config (conservative)
+        default_batch_config = {
+            "genie_max_concurrent": 3,
+            "genie_retry_attempts": 2,
+            "genie_timeout": 120,
+            "genie_circuit_threshold": 5,
+            "sql_max_concurrent": 10,
+            "sql_timeout": 60,
+            "eval_chunk_size": 10,
+        }
+
+        # Merge with user config
+        if batch_config:
+            default_batch_config.update(batch_config)
+
+        scorer = BatchBenchmarkScorer(
+            genie_client=genie_client,
+            llm_client=llm_client,
+            sql_executor=sql_executor,
+            config=default_batch_config
+        )
+
+        logger.info(f"Batch config: genie_concurrent={default_batch_config['genie_max_concurrent']}, "
+                   f"sql_concurrent={default_batch_config['sql_max_concurrent']}")
+    else:
+        logger.info("Using SEQUENTIAL scorer (slower but safer)")
+        scorer = BenchmarkScorer(
+            genie_client=genie_client,
+            llm_client=llm_client,
+            sql_executor=sql_executor,
+            config={"parallel_workers": 0}
+        )
 
     planner = CategoryEnhancer(llm_client, project_root / "prompts")
 
@@ -351,6 +386,11 @@ def main():
     parser.add_argument("--auto-promote", action="store_true", help="Auto-promote on success")
     parser.add_argument("--no-cleanup", action="store_true", help="Don't cleanup dev spaces")
 
+    # Batch mode options
+    parser.add_argument("--no-batch", action="store_true", help="Disable batch mode (use sequential)")
+    parser.add_argument("--genie-concurrent", type=int, default=3, help="Max concurrent Genie calls (batch mode)")
+    parser.add_argument("--sql-concurrent", type=int, default=10, help="Max concurrent SQL queries (batch mode)")
+
     args = parser.parse_args()
 
     # Load config from file or environment
@@ -374,6 +414,13 @@ def main():
         print("  Or use --config with a JSON file")
         sys.exit(1)
 
+    # Batch configuration
+    batch_mode = not args.no_batch
+    batch_config = {
+        "genie_max_concurrent": args.genie_concurrent,
+        "sql_max_concurrent": args.sql_concurrent,
+    } if batch_mode else None
+
     results = run_enhancement(
         databricks_host=databricks_host,
         databricks_token=databricks_token,
@@ -386,6 +433,8 @@ def main():
         max_loops=args.max_loops,
         auto_promote=args.auto_promote,
         auto_cleanup=not args.no_cleanup,
+        batch_mode=batch_mode,
+        batch_config=batch_config,
     )
 
     # Save results

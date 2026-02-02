@@ -52,13 +52,44 @@ High-level context and rules reinforcement that apply across the entire Genie Sp
 | Missing deduplication | "스냅샷 테이블은 ROW_NUMBER() 로 최신 데이터만 사용" |
 
 ═══════════════════════════════════════════════════════════════════════════════
-## DOMAIN CONTEXT (All Benchmarks)
+## STEP 1: LEARN DOMAIN RULES FROM ALL BENCHMARKS
 ═══════════════════════════════════════════════════════════════════════════════
 
-These are ALL the questions users will ask and their expected SQL.
-Use this to identify business rules applied consistently across queries.
+Study ALL benchmarks to discover business rules and conventions:
 
 {all_benchmarks}
+
+### Rule Discovery Tasks:
+
+1. **Default Filter Patterns:**
+   - Are certain filters applied consistently? (e.g., game_code, status)
+   - What WHERE clauses appear in most queries?
+   - Are there implicit filters users don't mention but SQL includes?
+
+2. **Date Interpretation Rules:**
+   - How do Korean date terms map to SQL?
+     "최근 7일" → what INTERVAL?
+     "이번 달" → what DATE_TRUNC?
+   - What date ranges are standard?
+   - Are there default date columns?
+
+3. **Calculation Conventions:**
+   - Are there standard formulas? (e.g., DAU = SUM(active_user))
+   - Safe division patterns? (try_divide vs /)
+   - Type casting conventions? (::decimal(38,2))
+
+4. **Data Deduplication Rules:**
+   - Which tables need ROW_NUMBER() deduplication?
+   - What PARTITION BY / ORDER BY patterns exist?
+   - Are there snapshot tables that need special handling?
+
+5. **Aggregation Conventions:**
+   - Default GROUP BY patterns?
+   - Standard window function usage?
+   - Common ORDER BY patterns?
+
+**Output: Domain Rule Book**
+Create a mental model of business rules that should be documented as instructions.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## ALL FAILURES TO ANALYZE ({failure_count} total)

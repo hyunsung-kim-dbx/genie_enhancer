@@ -95,6 +95,40 @@ Join specs define how tables can be joined. They tell Genie:
 - Tables shouldn't be joined
 
 ═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: EXTRACT JOIN PATTERNS FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Study ALL benchmarks to discover table relationships:
+
+### Join Pattern Mining:
+
+1. **Identify All JOINs in Expected SQL:**
+   - LEFT JOIN, INNER JOIN, etc.
+   - Which tables are joined?
+   - What columns are used in ON clauses?
+   - How frequently does each join pattern appear?
+
+2. **Determine Relationship Types:**
+   - Many-to-One: Detail table → Dimension table (e.g., orders → customers)
+   - One-to-Many: Parent → Children (e.g., customer → orders)
+   - One-to-One: Equal cardinality
+   - Many-to-Many: Complex relationships
+
+3. **Analyze Join Frequency:**
+   | Left Table | Right Table | Join Condition | Frequency |
+   |------------|-------------|----------------|-----------|
+   | summary_daily | region | country_code | 15 times |
+   | summary_daily | games | game_code | 12 times |
+
+4. **Identify Join Descriptions:**
+   From benchmark questions, understand WHY tables are joined:
+   - "지역별 분석" suggests join to region metadata
+   - "게임별 매출" suggests join to game metadata
+
+**Output: Join Relationship Map**
+Understand which tables should be joinable and how.
+
+═══════════════════════════════════════════════════════════════════════════════
 ## DOMAIN CONTEXT (All Benchmarks)
 ═══════════════════════════════════════════════════════════════════════════════
 

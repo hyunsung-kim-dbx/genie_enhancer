@@ -121,10 +121,43 @@ WHERE status = "active"              -- Double quotes are for identifiers
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-## DOMAIN CONTEXT (All Benchmarks)
+## STEP 1: EXTRACT QUERY PATTERNS FROM ALL BENCHMARKS
 ═══════════════════════════════════════════════════════════════════════════════
 
+Study ALL benchmarks to discover reusable query patterns:
+
 {all_benchmarks}
+
+### Pattern Extraction Tasks:
+
+1. **Identify Query Structure Families:**
+   - Simple aggregations (GROUP BY + SUM/COUNT)
+   - Window functions (ROW_NUMBER, RANK, LAG)
+   - CTEs (WITH clauses)
+   - Subqueries
+   - Self-joins or multi-table joins
+
+2. **Parameterize Common Patterns:**
+   For each structure family, identify what varies:
+   - Table names
+   - Column names
+   - Date ranges (INTERVAL values)
+   - Filtering conditions
+   - Aggregation functions
+
+3. **Calculate Pattern Frequency:**
+   - Which patterns appear most often?
+   - Which patterns help multiple failed questions?
+
+4. **Extract Template Structure:**
+   Convert specific queries into templates:
+   ```
+   SPECIFIC: SELECT SUM(active_user) FROM summary_daily WHERE event_date >= CURRENT_DATE - INTERVAL 7 DAYS
+   TEMPLATE: SELECT SUM(:metric_col) FROM :table WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS
+   ```
+
+**Output: Pattern Template Library**
+Create reusable query templates that can help multiple questions.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## ALL FAILURES TO ANALYZE ({failure_count} total)

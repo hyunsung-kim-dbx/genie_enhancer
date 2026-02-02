@@ -1,0 +1,98 @@
+[
+  {
+    "id": "kpi_001",
+    "question": "최근 7일간 inZOI의 일별 DAU 및 매출 추이는 어떻게 되나요?",
+    "korean_question": "최근 7일간 inZOI의 일별 DAU 및 매출 추이는 어떻게 되나요?",
+    "expected_sql": "SELECT \n  event_date,\n  game_code,\n  SUM(active_user) as dau,\n  SUM(cash_revenue)::decimal(38,2) as daily_revenue\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_daily\nWHERE game_code = 'inzoi'\n  AND event_date >= CURRENT_DATE - INTERVAL 7 DAYS\nGROUP BY event_date, game_code\nORDER BY event_date DESC;",
+    "category": "kpi",
+    "difficulty": "easy"
+  },
+  {
+    "id": "kpi_002",
+    "question": "최근 30일간 PUBG의 지역별 DARPU, DARPPU, DPUR를 비교해주세요",
+    "korean_question": "최근 30일간 PUBG의 지역별 DARPU, DARPPU, DPUR를 비교해주세요",
+    "expected_sql": "SELECT \n  L.event_date,\n  R.krafton_region,\n  SUM(L.active_user) as dau,\n  SUM(L.cash_revenue)::decimal(38,2) as daily_revenue,\n  try_divide(SUM(L.cash_revenue), SUM(L.active_user))::decimal(38,2) as darpu,\n  try_divide(SUM(L.cash_revenue), SUM(L.cash_paying_user))::decimal(38,2) as darppu,\n  try_divide(SUM(L.cash_paying_user), SUM(L.active_user))::decimal(38,4) as dpur\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_daily L\nLEFT JOIN sandbox.agent_poc.poc_meta_krafton_region R ON L.country_code = R.country_code\nWHERE L.game_code = 'bro'\n  AND L.event_date >= CURRENT_DATE - INTERVAL 30 DAYS\nGROUP BY L.event_date, R.krafton_region\nORDER BY daily_revenue DESC\nLIMIT 20;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_003",
+    "question": "최근 14일간 PUBG Mobile의 신규/기존/복귀 유저별 DAU 분포 및 DARPU, 유저 비율은 어떻게 되나요?",
+    "korean_question": "최근 14일간 PUBG Mobile의 신규/기존/복귀 유저별 DAU 분포 및 DARPU, 유저 비율은 어떻게 되나요?",
+    "expected_sql": "SELECT \n  event_date,\n  user_type,\n  SUM(active_user) as dau,\n  try_divide(SUM(cash_revenue), SUM(active_user))::decimal(38,2) as darpu,\n  ROUND(SUM(active_user) * 100.0 / SUM(SUM(active_user)) OVER (PARTITION BY event_date), 2) as user_type_ratio\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_daily\nWHERE game_code = 'pubgm'\n  AND event_date >= CURRENT_DATE - INTERVAL 14 DAYS\nGROUP BY event_date, user_type\nORDER BY event_date DESC, dau DESC;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_004",
+    "question": "최근 4주간 inZOI의 주별 WAU, WARPU, WPUR 트렌드를 보여주세요",
+    "korean_question": "최근 4주간 inZOI의 주별 WAU, WARPU, WPUR 트렌드를 보여주세요",
+    "expected_sql": "SELECT \n  start_date,\n  end_date,\n  week_start_day,\n  SUM(active_user) as wau,\n  SUM(cash_revenue)::decimal(38,2) as weekly_revenue,\n  try_divide(SUM(cash_revenue), SUM(active_user))::decimal(38,2) as warpu,\n  try_divide(SUM(cash_paying_user), SUM(active_user))::decimal(38,4) as wpur\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_weekly\nWHERE game_code = 'inzoi'\n  AND week_start_day = 2\n  AND end_date >= CURRENT_DATE - INTERVAL 28 DAYS\nGROUP BY start_date, end_date, week_start_day\nORDER BY end_date DESC;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_005",
+    "question": "PUBG의 최근 3개월 MAU, MARPU, MARPPU, MPUR는 어떻게 변화했나요?",
+    "korean_question": "PUBG의 최근 3개월 MAU, MARPU, MARPPU, MPUR는 어떻게 변화했나요?",
+    "expected_sql": "SELECT \n  start_date,\n  end_date,\n  SUM(active_user) as mau,\n  SUM(cash_revenue)::decimal(38,2) as monthly_revenue,\n  try_divide(SUM(cash_revenue), SUM(active_user))::decimal(38,2) as marpu,\n  try_divide(SUM(cash_revenue), SUM(cash_paying_user))::decimal(38,2) as marppu,\n  try_divide(SUM(cash_paying_user), SUM(active_user))::decimal(38,4) as mpur\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_monthly\nWHERE game_code = 'bro'\n  AND end_date = last_day(end_date)\n  AND end_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL 3 MONTHS\nGROUP BY start_date, end_date\nORDER BY end_date DESC;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_006",
+    "question": "최근 30일간 inZOI 신규 유저의 D+1, D+7, D+14 리텐션율과 코호트 규모를 보여주세요",
+    "korean_question": "최근 30일간 inZOI 신규 유저의 D+1, D+7, D+14 리텐션율과 코호트 규모를 보여주세요",
+    "expected_sql": "SELECT \n  cohort_date,\n  day_plus,\n  try_divide(SUM(retained_user), SUM(cohort_size))::decimal(38,4) as retention_rate,\n  SUM(cohort_size) as cohort_size,\n  SUM(retained_user) as retained_users\nFROM sandbox.agent_poc.poc_krafton_traffic_kad_retention_daily\nWHERE game_code = 'inzoi'\n  AND user_type = 'New'\n  AND day_plus IN (1, 7, 14)\n  AND cohort_date >= CURRENT_DATE - INTERVAL 30 DAYS\nGROUP BY cohort_date, day_plus\nORDER BY cohort_date DESC, day_plus;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_007",
+    "question": "최근 7일간 PUBG Mobile의 플랫폼별 DAU 및 평균 일일 접속 시간은 어떻게 되나요?",
+    "korean_question": "최근 7일간 PUBG Mobile의 플랫폼별 DAU 및 평균 일일 접속 시간은 어떻게 되나요?",
+    "expected_sql": "SELECT \n  event_date,\n  device as platform,\n  SUM(active_user) as dau,\n  try_divide(SUM(online_ts_mins), SUM(active_user))::decimal(38,2) as avg_online_time_mins,\n  ROUND(try_divide(SUM(online_ts_mins), SUM(active_user)) / 60, 2) as avg_online_time_hours\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_daily\nWHERE game_code = 'pubgm'\n  AND event_date >= CURRENT_DATE - INTERVAL 7 DAYS\nGROUP BY event_date, device\nORDER BY event_date DESC, dau DESC;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_008",
+    "question": "최근 30일간 PUBG에서 가장 많이 판매된 GCoin 상품은 무엇인가요?",
+    "korean_question": "최근 30일간 PUBG에서 가장 많이 판매된 GCoin 상품은 무엇인가요?",
+    "expected_sql": "SELECT \n  Rb.category,\n  Rb.sub_category,\n  Rb.product_name,\n  Rb.event_type,\n  SUM(L.unit_sold) as total_units_sold,\n  SUM(L.paid_gcoin_used) as total_paid_gcoin_used,\n  ROUND(AVG(L.paid_gcoin_used / NULLIF(L.unit_sold, 0)), 2) as avg_price_per_unit\nFROM sandbox.agent_poc.poc_pubg_economy_gcoin_used_by_product_with_refund_daily L\nLEFT JOIN sandbox.agent_poc.poc_meta_pubg_gcoin_items Rb\n  ON L.platform = Rb.platform\n  AND L.sales_id = Rb.sales_id\n  AND L.product_id = Rb.product_id\nWHERE L.date >= CURRENT_DATE - INTERVAL 30 DAYS\nGROUP BY Rb.category, Rb.sub_category, Rb.product_name, Rb.event_type\nORDER BY total_paid_gcoin_used DESC\nLIMIT 20;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_009",
+    "question": "최근 2주간 inZOI의 지난주 대비 이번주 WAU 및 매출 증감율은 얼마인가요?",
+    "korean_question": "최근 2주간 inZOI의 지난주 대비 이번주 WAU 및 매출 증감율은 얼마인가요?",
+    "expected_sql": "WITH weekly_data AS (\n  SELECT \n    start_date,\n    end_date,\n    SUM(active_user) as wau,\n    SUM(cash_revenue)::decimal(38,2) as weekly_revenue\n  FROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_weekly\n  WHERE game_code = 'inzoi'\n    AND week_start_day = 2\n    AND end_date >= CURRENT_DATE - INTERVAL 14 DAYS\n  GROUP BY start_date, end_date\n),\nweekly_comparison AS (\n  SELECT \n    start_date,\n    end_date,\n    wau,\n    weekly_revenue,\n    LAG(wau) OVER (ORDER BY end_date) as prev_wau,\n    LAG(weekly_revenue) OVER (ORDER BY end_date) as prev_revenue,\n    ROUND((wau - LAG(wau) OVER (ORDER BY end_date)) * 100.0 / NULLIF(LAG(wau) OVER (ORDER BY end_date), 0), 2) as wau_growth_rate,\n    ROUND((weekly_revenue - LAG(weekly_revenue) OVER (ORDER BY end_date)) * 100.0 / NULLIF(LAG(weekly_revenue) OVER (ORDER BY end_date), 0), 2) as revenue_growth_rate\n  FROM weekly_data\n)\nSELECT *\nFROM weekly_comparison\nORDER BY end_date DESC;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_010",
+    "question": "2025년 1월 1일부터 2월 28일까지 PUBG에서 이벤트 기간(2025년 1월 15일-31일) 동안 신규 유저의 D+7 리텐션율이 평상시보다 높았나요?",
+    "korean_question": "2025년 1월 1일부터 2월 28일까지 PUBG에서 이벤트 기간(2025년 1월 15일-31일) 동안 신규 유저의 D+7 리텐션율이 평상시보다 높았나요?",
+    "expected_sql": "WITH retention_data AS (\n  SELECT \n    cohort_date,\n    CASE \n      WHEN cohort_date BETWEEN DATE '2025-01-15' AND DATE '2025-01-31' THEN 'event_period'\n      ELSE 'normal_period'\n    END as period_type,\n    try_divide(SUM(retained_user), SUM(cohort_size))::decimal(38,4) as retention_rate,\n    SUM(cohort_size) as cohort_size\n  FROM sandbox.agent_poc.poc_krafton_traffic_kad_retention_daily\n  WHERE game_code = 'bro'\n    AND user_type = 'New'\n    AND day_plus = 7\n    AND cohort_date >= DATE '2025-01-01'\n    AND cohort_date <= DATE '2025-02-28'\n  GROUP BY cohort_date\n)\nSELECT \n  period_type,\n  COUNT(*) as days_count,\n  ROUND(AVG(retention_rate), 4) as avg_retention_rate,\n  ROUND(MIN(retention_rate), 4) as min_retention_rate,\n  ROUND(MAX(retention_rate), 4) as max_retention_rate,\n  SUM(cohort_size) as total_cohort_size\nFROM retention_data\nGROUP BY period_type\nORDER BY period_type;",
+    "category": "kpi",
+    "difficulty": "hard"
+  },
+  {
+    "id": "kpi_011",
+    "question": "PUBG Mobile의 최근 완료된 월 MARPPU 상위 3개 지역은 어디인가요?",
+    "korean_question": "PUBG Mobile의 최근 완료된 월 MARPPU 상위 3개 지역은 어디인가요?",
+    "expected_sql": "SELECT \n  L.start_date,\n  L.end_date,\n  R.krafton_region,\n  SUM(L.cash_revenue)::decimal(38,2) as monthly_revenue,\n  SUM(L.cash_paying_user) as paying_users,\n  try_divide(SUM(L.cash_revenue), SUM(L.cash_paying_user))::decimal(38,2) as marppu\nFROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_monthly L\nLEFT JOIN sandbox.agent_poc.poc_meta_krafton_region R ON L.country_code = R.country_code\nWHERE L.game_code = 'pubgm'\n  AND L.end_date = last_day(L.end_date)\n  AND L.end_date = last_day(CURRENT_DATE - INTERVAL 1 MONTH)\nGROUP BY L.start_date, L.end_date, R.krafton_region\nORDER BY marppu DESC\nLIMIT 3;",
+    "category": "kpi",
+    "difficulty": "medium"
+  },
+  {
+    "id": "kpi_012",
+    "question": "최근 30일간 inZOI의 복귀 유저와 기존 유저의 DARPU 차이 및 차이율은 얼마나 되나요?",
+    "korean_question": "최근 30일간 inZOI의 복귀 유저와 기존 유저의 DARPU 차이 및 차이율은 얼마나 되나요?",
+    "expected_sql": "WITH user_type_metrics AS (\n  SELECT \n    event_date,\n    user_type,\n    SUM(active_user) as dau,\n    SUM(cash_revenue)::decimal(38,2) as daily_revenue,\n    try_divide(SUM(cash_revenue), SUM(active_user))::decimal(38,2) as darpu,\n    try_divide(SUM(cash_paying_user), SUM(active_user))::decimal(38,4) as dpur\n  FROM sandbox.agent_poc.poc_krafton_kpi_kad_ingame_summary_daily\n  WHERE game_code = 'inzoi'\n    AND event_date >= CURRENT_DATE - INTERVAL 30 DAYS\n    AND user_type IN ('Return', 'Exist')\n  GROUP BY event_date, user_type\n),\ndarpu_comparison AS (\n  SELECT \n    event_date,\n    MAX(CASE WHEN user_type = 'Return' THEN darpu END) as return_darpu,\n    MAX(CASE WHEN user_type = 'Exist' THEN darpu END) as exist_darpu,\n    MAX(CASE WHEN user_type = 'Return' THEN dau END) as return_dau,\n    MAX(CASE WHEN user_type = 'Exist' THEN dau END) as exist_dau\n  FROM user_type_metrics\n  GROUP BY event_date\n)\nSELECT \n  event_date,\n  return_darpu,\n  exist_darpu,\n  return_darpu - exist_darpu as darpu_difference,\n  ROUND((return_darpu - exist_darpu) * 100.0 / NULLIF(exist_darpu, 0), 2) as darpu_diff_percentage,\n  return_dau,\n  exist_dau\nFROM darpu_comparison\nWHERE return_darpu IS NOT NULL AND exist_darpu IS NOT NULL\nORDER BY event_date DESC;",
+    "category": "kpi",
+    "difficulty": "hard"
+  }
+]

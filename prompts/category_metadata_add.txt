@@ -108,10 +108,45 @@ BAD:  "Orders table"
 | Answers about out-of-scope data | Table descriptions (scope clarity) |
 
 ═══════════════════════════════════════════════════════════════════════════════
-## DOMAIN CONTEXT (All Benchmarks)
+## STEP 1: LEARN FROM ALL BENCHMARKS
 ═══════════════════════════════════════════════════════════════════════════════
 
+Before analyzing failures, study ALL benchmarks to understand the domain:
+
 {all_benchmarks}
+
+### Pattern Discovery Tasks:
+
+1. **Table Usage Analysis:**
+   - Which tables appear most frequently in expected_sql?
+   - What are the table relationships (JOINs)?
+   - Which tables are primary vs auxiliary (metadata, lookup)?
+
+2. **Metric/Calculation Patterns:**
+   - What metrics are calculated? (e.g., SUM, AVG, COUNT, try_divide)
+   - Are there domain-specific calculations? (e.g., DAU, retention, conversion rates)
+   - What data types/casting patterns appear? (e.g., ::decimal(38,2))
+
+3. **Korean Vocabulary Mining:**
+   - Map Korean terms in questions → SQL columns/tables in expected_sql
+   - Count frequency across ALL benchmarks (not just failures)
+   - Identify domain terminology (e.g., "일별" → daily, "매출" → revenue)
+
+4. **Date/Time Patterns:**
+   - How are date ranges specified? (INTERVAL, DATE_TRUNC)
+   - What date columns are used? (event_date, created_at, etc.)
+   - Are there date filters that appear consistently?
+
+5. **Aggregation Patterns:**
+   - What GROUP BY patterns appear?
+   - Are there window functions? (ROW_NUMBER, RANK)
+   - What ordering/sorting patterns exist?
+
+**Output of Pattern Discovery:**
+Create a mental model of:
+- Domain vocabulary (Korean ↔ SQL mapping)
+- Common table structures and relationships
+- Typical query patterns for this domain
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## ALL FAILURES TO ANALYZE ({failure_count} total)
@@ -126,35 +161,43 @@ BAD:  "Orders table"
 {space_config}
 
 ═══════════════════════════════════════════════════════════════════════════════
-## YOUR ANALYSIS TASK
+## STEP 2: ANALYZE FAILURES WITH DOMAIN KNOWLEDGE
 ═══════════════════════════════════════════════════════════════════════════════
 
-Analyze ALL failures to identify metadata that should be ADDED:
+Now that you understand the domain patterns from ALL benchmarks, analyze failures:
 
 ### 1. Synonym Mining (CRITICAL for Korean)
 
-Scan all korean_questions and expected_sql to find:
-- Korean terms in questions that map to specific columns
-- Count frequency: high-frequency terms are most important
+Using your domain vocabulary map from STEP 1:
+- Which Korean terms appear in failed questions?
+- Do they map to columns in expected_sql?
+- Are these mappings already in space_config as synonyms?
+- Count frequency across ALL benchmarks (not just failures)
 
 **Example synonym mining:**
-| Korean Term | Column in Expected SQL | Frequency |
-|-------------|------------------------|-----------|
-| 리액션 | reaction.count | 5 failures |
-| 추천 | votes_up | 3 failures |
-| 채널 | channel_name | 4 failures |
+| Korean Term | Column in Expected SQL | Frequency (All) | In Failures |
+|-------------|------------------------|-----------------|-------------|
+| 일별 | event_date (daily) | 15 benchmarks | 5 failures |
+| 매출 | cash_revenue | 12 benchmarks | 4 failures |
+| 유저 | active_user | 20 benchmarks | 8 failures |
 
-### 2. Column Descriptions
+### 2. Column Descriptions (Based on Learned Patterns)
 
 For columns where Genie picks the WRONG column:
-- Add description explaining when to use this column
-- Clarify difference from similar columns
+- Use calculation patterns from STEP 1 to describe column purpose
+  Example: If "active_user" appears in SUM() for DAU calculations, describe it as:
+  "일별 활성 사용자 수. DAU 계산에 사용."
+- Reference how the column is used in expected_sql across benchmarks
+- Clarify difference from similar columns based on usage patterns
 
-### 3. Table Descriptions
+### 3. Table Descriptions (Based on Domain Understanding)
 
 For tables where Genie picks the WRONG table:
-- Add description explaining table scope
-- Clarify what data is/isn't included
+- Use table frequency analysis from STEP 1 to describe scope
+  Example: If "summary_daily" appears in 15/20 benchmarks for daily metrics:
+  "일별 집계 데이터. 일간 KPI 분석에 사용."
+- Describe table relationships discovered in JOIN patterns
+- Clarify what data is/isn't included based on WHERE clauses in expected_sql
 
 **Prioritization:**
 - Add synonyms that help the MOST failures first
@@ -169,13 +212,34 @@ Return JSON:
 ```json
 {{
   "analysis": {{
+    "domain_patterns_discovered": {{
+      "primary_tables": ["table1 (frequency: N)", "table2 (frequency: M)"],
+      "common_metrics": ["SUM(active_user) as DAU", "try_divide(revenue, users) as ARPU"],
+      "date_columns": ["event_date", "created_at"],
+      "common_filters": ["game_code = 'xxx'", "event_date >= CURRENT_DATE - INTERVAL N DAYS"]
+    }},
+    "korean_vocabulary_map": [
+      {{
+        "korean_term": "일별",
+        "sql_element": "event_date / daily aggregation",
+        "total_occurrences": 15,
+        "in_failures": 5
+      }},
+      {{
+        "korean_term": "매출",
+        "sql_element": "cash_revenue column",
+        "total_occurrences": 12,
+        "in_failures": 4
+      }}
+    ],
     "korean_terms_mined": [
       {{
-        "term": "리액션",
-        "maps_to_table": "sandbox.agent_poc.reaction",
-        "maps_to_column": "count",
+        "term": "일별",
+        "maps_to_table": "sandbox.agent_poc.summary_daily",
+        "maps_to_column": "event_date",
         "failure_count": 5,
-        "example_questions": ["리액션 수가 가장 많은...", "리액션 현황..."]
+        "total_benchmark_count": 15,
+        "example_questions": ["일별 매출", "일별 유저 수"]
       }}
     ],
     "column_clarifications_needed": [

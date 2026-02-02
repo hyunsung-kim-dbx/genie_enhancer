@@ -4,10 +4,25 @@ Automated improvement system for Databricks Genie Spaces using benchmark-driven 
 
 ## What It Does
 
-1. **Score** - Evaluate Genie Space against Q&A benchmarks
-2. **Plan** - Analyze failures, generate ALL fixes at once
+1. **Score** - Evaluate Genie Space against Q&A benchmarks ⚡ **NEW: 13x faster with batch scoring**
+2. **Plan** - Analyze failures, generate ALL fixes at once (domain-agnostic pattern learning)
 3. **Apply** - Apply ALL fixes in ONE batch update
 4. **Validate** - Re-score and check improvement
+
+## 🚀 Performance
+
+| Scoring Mode | 20 Benchmarks | Speedup |
+|--------------|--------------|---------|
+| Sequential (old) | ~7 min | 1x |
+| Parallel (v2) | ~1.5 min | 4.6x |
+| **Batch (v3)** | **~30s** | **13x** |
+
+Batch mode includes safety measures:
+- ✅ Rate limiting (semaphore)
+- ✅ Retry with exponential backoff
+- ✅ Circuit breaker (auto-fallback to sequential)
+- ✅ Per-query timeout handling
+- ✅ Graceful degradation
 
 ## Architecture
 
@@ -62,13 +77,30 @@ genie_enhancer/
 
 ## Quick Start
 
-### 1. Upload to Databricks
+### 1. Basic Usage (Batch Mode - Recommended)
+
+```bash
+python run_enhancement.py \
+  --host workspace.cloud.databricks.com \
+  --token $DATABRICKS_TOKEN \
+  --space-id $GENIE_SPACE_ID \
+  --warehouse-id $WAREHOUSE_ID \
+  --benchmarks benchmarks/kpi_benchmark.json
+```
+
+**Options:**
+- `--genie-concurrent N` - Max concurrent Genie calls (default: 3)
+- `--no-batch` - Use sequential mode instead
+- `--auto-promote` - Auto-promote on success
+- See `docs/USAGE_GUIDE.md` for all options
+
+### 2. Upload to Databricks
 
 ```bash
 databricks workspace import-dir genie_enhancer /Workspace/Users/your.email/genie_enhancer
 ```
 
-### 2. Run Orchestrator
+### 3. Run Orchestrator
 
 Open `workflows/orchestrator.py` and set:
 - `space_id`: Your Genie Space ID
@@ -126,6 +158,34 @@ Each job run = one loop. If target not reached:
 | `warehouse_id` | SQL Warehouse (for metric views) | Optional |
 | `catalog` | Unity Catalog for state | sandbox |
 | `schema` | Schema for state tables | genie_enhancement |
+
+## Documentation
+
+### Quick Start Guides
+- **[USAGE_GUIDE.md](docs/USAGE_GUIDE.md)** - Complete usage guide with examples
+- **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Deployment instructions
+
+### System Architecture
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - V2 architecture (interactive workflow)
+- **[ARCHITECTURE_V3_ENHANCEMENTS.md](docs/ARCHITECTURE_V3_ENHANCEMENTS.md)** - V3 improvements (batch, UI)
+
+### Features & Integration
+- **[BATCH_SCORING.md](docs/BATCH_SCORING.md)** - Batch scoring system (13x faster)
+- **[GENERALIZATION_CHANGES.md](docs/GENERALIZATION_CHANGES.md)** - Domain-agnostic pattern learning
+- **[STREAMLIT_UI.md](docs/STREAMLIT_UI.md)** - Enhanced UI visual guide
+- **[UI_INTEGRATION.md](docs/UI_INTEGRATION.md)** - UI integration guide
+- **[INTEGRATION_SUMMARY.md](docs/INTEGRATION_SUMMARY.md)** - Complete integration summary
+
+### API References
+- **[Genie_Conversational_API.md](docs/Genie_Conversational_API.md)** - Conversational API
+- **[Databricks_Genie_Space_Import_Export_APIs.md](docs/Databricks_Genie_Space_Import_Export_APIs.md)** - Import/export APIs
+- **[Genie_Space_API_Reference.md](docs/Genie_Space_API_Reference.md)** - API reference
+
+### Best Practices
+- **[Genie_Space_Best_Practices.md](docs/Genie_Space_Best_Practices.md)** - Genie Space best practices
+
+### Historical Documentation
+- **[docs/archive/](docs/archive/)** - Archived documentation (see INDEX.md)
 
 ## License
 

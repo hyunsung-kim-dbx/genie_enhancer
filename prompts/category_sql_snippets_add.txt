@@ -86,10 +86,48 @@ Aggregate calculations.
 | Wrong calculation | Add expression with correct formula |
 
 ═══════════════════════════════════════════════════════════════════════════════
-## DOMAIN CONTEXT (All Benchmarks)
+## STEP 1: EXTRACT REUSABLE SQL PATTERNS FROM ALL BENCHMARKS
 ═══════════════════════════════════════════════════════════════════════════════
 
+Study ALL benchmarks to discover reusable SQL building blocks:
+
 {all_benchmarks}
+
+### SQL Pattern Mining:
+
+1. **Measure Patterns (Aggregations):**
+   - Which aggregations appear repeatedly?
+   - What Korean terms map to these measures?
+
+   Example analysis:
+   | Korean Term | SQL Pattern | Frequency |
+   |-------------|-------------|-----------|
+   | DAU | SUM(active_user) | 15 times |
+   | 매출 | SUM(cash_revenue)::decimal(38,2) | 12 times |
+   | ARPU | try_divide(SUM(revenue), SUM(users))::decimal(38,2) | 8 times |
+
+2. **Expression Patterns (Row Calculations):**
+   - CASE statements that appear multiple times
+   - Date transformations (DATE_TRUNC, date arithmetic)
+   - Type conversions (::decimal, CAST)
+
+3. **Filter Patterns (WHERE conditions):**
+   - Common filter conditions
+   - Business terms for filters ("active", "recent")
+
+   Example:
+   | Korean Term | SQL Pattern | Frequency |
+   |-------------|-------------|-----------|
+   | 최근 7일 | event_date >= CURRENT_DATE - INTERVAL 7 DAYS | 10 times |
+   | 월간 | end_date = last_day(end_date) | 8 times |
+
+4. **Synonym Extraction:**
+   For each pattern, identify Korean synonyms from questions:
+   - "매출", "수익", "revenue" all map to revenue calculation
+   - "유저", "사용자", "user" all map to user metrics
+
+**Output: Reusable SQL Library**
+Identify calculations that should become snippets.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## ALL FAILURES TO ANALYZE ({failure_count} total)
