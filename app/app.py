@@ -616,17 +616,24 @@ elif st.session_state.step == 'setup':
         # This way the app acts with user's permissions
         user_token = config.get('user_token')
 
+        # Debug: show token source
+        token_source = "user (X-Forwarded-Access-Token)" if user_token else None
+
         if not user_token:
             # Fallback to SP token if user token not available
             if 'workspace_client' in config:
                 headers = config['workspace_client'].config.authenticate()
                 user_token = headers.get('Authorization', '').replace('Bearer ', '')
+                token_source = "service principal"
             else:
                 user_token = config.get('databricks_token')
+                token_source = "manual token"
 
         if not user_token:
             st.error("❌ No authentication token available")
             st.stop()
+
+        st.caption(f"🔑 Auth: {token_source} (token: {user_token[:20]}...)")
 
         # Initialize clients - ALL use user token (user-assumed auth)
         status.markdown("🔄 Initializing clients...")
